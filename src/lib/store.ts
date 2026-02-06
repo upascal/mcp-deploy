@@ -14,6 +14,8 @@ interface Store {
   deployments: Record<string, DeploymentRecord>;
   secrets: Record<string, Record<string, string>>;
   seededDefaults: boolean;
+  cfToken?: string;
+  cfAccountId?: string;
 }
 
 const EMPTY_STORE: Store = {
@@ -136,4 +138,33 @@ export async function resetSeededDefaults(): Promise<void> {
   const store = readStore();
   store.seededDefaults = false;
   writeStore(store);
+}
+
+// ─── Cloudflare Config ───
+
+export async function getCfToken(): Promise<string | null> {
+  const store = readStore();
+  return store.cfToken ?? null;
+}
+
+export async function setCfToken(token: string): Promise<void> {
+  const store = readStore();
+  store.cfToken = token;
+  writeStore(store);
+}
+
+export async function getCfAccountId(): Promise<string | null> {
+  const store = readStore();
+  return store.cfAccountId ?? null;
+}
+
+export async function setCfAccountId(accountId: string): Promise<void> {
+  const store = readStore();
+  store.cfAccountId = accountId;
+  writeStore(store);
+}
+
+export async function isCfConfigured(): Promise<boolean> {
+  const store = readStore();
+  return !!(store.cfToken && store.cfAccountId);
 }
