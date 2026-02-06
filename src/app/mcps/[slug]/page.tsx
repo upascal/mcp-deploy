@@ -30,8 +30,8 @@ interface DeployResult {
   workerUrl: string;
   mcpUrl: string;
   mcpUrlWithToken: string;
-  claudeConfig: unknown;
   bearerToken: string;
+  oauthEnabled?: boolean;
   error?: string;
 }
 
@@ -543,6 +543,7 @@ export default function McpDetailPage({
               mcpUrlWithToken={deployResult.mcpUrlWithToken}
               bearerToken={deployResult.bearerToken}
               slug={slug}
+              oauthEnabled={deployResult.oauthEnabled}
             />
           </div>
         </div>

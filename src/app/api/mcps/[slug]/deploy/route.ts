@@ -13,6 +13,13 @@ import {
   getMcpSecrets,
 } from "@/lib/kv";
 import { encrypt } from "@/lib/encryption";
+import { generateOAuthWrapper } from "@/lib/worker-oauth-wrapper";
+import { generateJWTSecret } from "@/lib/oauth/jwt";
+import { getIssuerUrl } from "@/lib/oauth/provider";
+import {
+  setDeploymentJWTSecret,
+  mapWorkerUrlToSlug,
+} from "@/lib/oauth/store";
 
 export async function POST(
   request: Request,
@@ -55,24 +62,50 @@ export async function POST(
       ...userSecrets,
     };
 
-    // Generate bearer token
+    // Generate bearer token (kept for backward compatibility)
     const bearerToken = CloudflareDeployService.generateBearerToken();
+
+    // Generate OAuth JWT signing secret for this deployment
+    const jwtSecret = generateJWTSecret();
+    const issuerUrl = getIssuerUrl();
+
+    // Generate the OAuth wrapper module
+    const oauthWrapper = generateOAuthWrapper(
+      resolved.durableObjectClassName,
+      issuerUrl
+    );
 
     // Get the bundle content from GitHub
     const bundleContent = await getBundleContent(resolved);
 
-    // Deploy the worker
+    // Deploy the worker with OAuth wrapper
     const service = new CloudflareDeployService(cfToken, cfAccountId);
-    const { url } = await service.deployWorker(resolved, bundleContent);
+    const { url } = await service.deployWorker(
+      resolved,
+      bundleContent,
+      oauthWrapper
+    );
 
-    // Set all secrets on the worker
+    // Set all secrets on the worker (including OAuth secrets)
     const allWorkerSecrets: Record<string, string> = {
       ...mergedSecrets,
       ...userConfig,
       BEARER_TOKEN: bearerToken,
+      OAUTH_JWT_SECRET: jwtSecret,
     };
 
     await service.setSecrets(resolved.workerName, allWorkerSecrets);
+
+    // Store OAuth state: JWT secret and URL-to-slug mapping
+    // The MCP URL is at /mcp on the worker
+    const mcpUrl = `${url}/mcp`;
+    await setDeploymentJWTSecret(slug, jwtSecret);
+    // Map both the base URL and /mcp URL to this slug
+    await mapWorkerUrlToSlug(url, slug);
+    await mapWorkerUrlToSlug(mcpUrl, slug);
+    // Also map the origin (what the JWT aud will be)
+    const origin = new URL(url).origin;
+    await mapWorkerUrlToSlug(origin, slug);
 
     // Store deployment record
     await setDeployment({
@@ -87,32 +120,15 @@ export async function POST(
     // Store user secrets (not auto-generated ones)
     await setMcpSecrets(slug, { ...mergedSecrets, ...userConfig });
 
-    // Build Claude Desktop config snippet
-    const mcpUrl = `${url}/mcp`;
-    const claudeConfig = {
-      mcpServers: {
-        [slug]: {
-          command: "npx",
-          args: [
-            "mcp-remote",
-            mcpUrl,
-            "--header",
-            "Authorization:${AUTH_HEADER}",
-          ],
-          env: {
-            AUTH_HEADER: `Bearer ${bearerToken}`,
-          },
-        },
-      },
-    };
-
     return NextResponse.json({
       success: true,
       workerUrl: url,
       mcpUrl,
+      // Keep legacy fields for backward compat
       mcpUrlWithToken: `${url}/mcp/t/${bearerToken}`,
-      claudeConfig,
       bearerToken,
+      // OAuth connection info
+      oauthEnabled: true,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

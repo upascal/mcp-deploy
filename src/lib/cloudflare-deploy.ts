@@ -55,12 +55,18 @@ export class CloudflareDeployService {
    * Deploy a worker to Cloudflare using the Scripts Upload API.
    * Uses multipart form data with the bundled JS + metadata.
    *
+   * When an OAuth wrapper is provided, uploads two modules:
+   *   - `index.mjs` (the OAuth wrapper, set as main_module)
+   *   - `original.mjs` (the actual MCP worker code)
+   *
    * @param entry - The resolved MCP entry with all metadata
    * @param bundleContent - The worker script content
+   * @param oauthWrapper - Optional OAuth wrapper module code
    */
   async deployWorker(
     entry: ResolvedMcpEntry,
-    bundleContent: string
+    bundleContent: string,
+    oauthWrapper?: string
   ): Promise<{ url: string }> {
     const workerName = entry.workerName;
 
@@ -100,11 +106,31 @@ export class CloudflareDeployService {
 
     // Upload via multipart form data
     const formData = new FormData();
-    formData.append(
-      "index.mjs",
-      new Blob([bundleContent], { type: "application/javascript+module" }),
-      "index.mjs"
-    );
+
+    if (oauthWrapper) {
+      // Two-module deployment: OAuth wrapper as entry + original worker
+      formData.append(
+        "index.mjs",
+        new Blob([oauthWrapper], { type: "application/javascript+module" }),
+        "index.mjs"
+      );
+      formData.append(
+        "original.mjs",
+        new Blob([bundleContent], { type: "application/javascript+module" }),
+        "original.mjs"
+      );
+      console.log(
+        `[CloudflareDeployService] Deploying with OAuth wrapper (two modules)`
+      );
+    } else {
+      // Single-module deployment (legacy)
+      formData.append(
+        "index.mjs",
+        new Blob([bundleContent], { type: "application/javascript+module" }),
+        "index.mjs"
+      );
+    }
+
     formData.append(
       "metadata",
       new Blob([JSON.stringify(metadata)], { type: "application/json" })
