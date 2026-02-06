@@ -2,15 +2,20 @@
   "name": "mcp-deploy",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "mcp-deploy": "./bin/mcp-deploy.js"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "bundle": "npx tsx scripts/bundle-workers.ts"
+    "bundle": "npx tsx scripts/bundle-workers.ts",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@vercel/kv": "^3.0.0",
     "cloudflare": "^5.2.0",
     "next": "^16.1.6",
     "react": "^19.2.4",

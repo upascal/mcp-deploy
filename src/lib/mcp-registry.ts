@@ -1,5 +1,5 @@
 import type { McpRegistryEntry, ResolvedMcpEntry, StoredMcpEntry } from "./types";
-import { getMcps, addMcp, hasSeededDefaults, markSeededDefaults } from "./kv";
+import { getMcps, addMcp, hasSeededDefaults, markSeededDefaults } from "./store";
 import { fetchMcpMetadata, getLatestVersion } from "./github-releases";
 
 /**

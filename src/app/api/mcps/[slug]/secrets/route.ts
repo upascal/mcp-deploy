@@ -6,7 +6,7 @@ import {
   getCfAccountId,
   getMcpSecrets,
   setMcpSecrets,
-} from "@/lib/kv";
+} from "@/lib/store";
 
 /**
  * GET: Return which secret keys are configured (not their values).

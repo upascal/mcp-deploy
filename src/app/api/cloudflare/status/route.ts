@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isCfConfigured, getCfAccountId } from "@/lib/kv";
+import { isCfConfigured, getCfAccountId } from "@/lib/store";
 
 export async function GET() {
   try {

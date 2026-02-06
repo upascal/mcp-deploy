@@ -4,7 +4,7 @@ import {
   fetchMcpMetadata,
   parseGitHubRepo,
 } from "@/lib/github-releases";
-import { addMcp, getMcps } from "@/lib/kv";
+import { addMcp, getMcps } from "@/lib/store";
 
 /**
  * Add a new MCP from a GitHub repository.

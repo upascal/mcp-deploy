@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStoredMcp } from "@/lib/mcp-registry";
 import { CloudflareDeployService } from "@/lib/cloudflare-deploy";
-import { getCfToken, getCfAccountId, getDeployment } from "@/lib/kv";
+import { getCfToken, getCfAccountId, getDeployment } from "@/lib/store";
 
 export async function GET(
   _request: Request,

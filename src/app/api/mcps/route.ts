@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAllMcps, resolveMcpEntry, checkForUpdate } from "@/lib/mcp-registry";
-import { getDeployment } from "@/lib/kv";
+import { getDeployment } from "@/lib/store";
 
 export async function GET() {
   try {

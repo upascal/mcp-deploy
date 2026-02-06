@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { removeMcp } from "@/lib/kv";
+import { removeMcp } from "@/lib/store";
 
 /**
  * Remove an MCP from the registry.

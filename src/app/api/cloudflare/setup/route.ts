@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { CloudflareDeployService } from "@/lib/cloudflare-deploy";
-import { setCfToken, setCfAccountId } from "@/lib/kv";
+import { setCfToken, setCfAccountId } from "@/lib/store";
 
 export async function POST(request: Request) {
   try {

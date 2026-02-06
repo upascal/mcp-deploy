@@ -4,10 +4,10 @@ A Next.js dashboard for deploying and managing MCP (Model Context Protocol) serv
 
 ## What it does
 
-1. Connect your Cloudflare account (via API token)
-2. Configure your MCP servers (API keys, platform selection)
+1. Add MCP servers from GitHub releases
+2. Configure secrets (API keys, library IDs, etc.)
 3. Deploy to Cloudflare Workers with one click
-4. Get Claude Desktop/Code config snippets
+4. Get connection URLs with embedded bearer tokens
 5. Update secrets without redeploying
 6. Monitor health of deployed workers
 
@@ -16,39 +16,69 @@ A Next.js dashboard for deploying and managing MCP (Model Context Protocol) serv
 - **Paper Search MCP** — Search academic papers across Semantic Scholar, CrossRef, arXiv, PubMed, bioRxiv, medRxiv
 - **Zotero Assistant MCP** — Manage your Zotero library with 20+ tools
 
-## Setup
+## Quick Start
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20+
+- A [Cloudflare](https://cloudflare.com) account (free tier works)
+
+### Setup
 
 ```bash
+# Clone the repo
+git clone https://github.com/upascal/mcp-deploy.git
+cd mcp-deploy
+
 # Install dependencies
 npm install
 
-# Bundle the MCP worker scripts from sibling repos
-npm run bundle
+# Log in to Cloudflare (opens browser)
+npx wrangler login
 
-# Set up environment variables
-cp .env.example .env.local
-# Edit .env.local with your ENCRYPTION_KEY and Vercel KV credentials
-
-# Run dev server
+# Start the web interface
 npm run dev
-
-# Kill the server 
-kill -9 $(pgrep -f '^next-server')
+# OR use the CLI
+node bin/mcp-deploy.js -gui
 ```
 
-### Environment Variables
+Open [http://localhost:3000](http://localhost:3000):
 
+1. **Add an MCP** -- Paste a GitHub repo URL (must have releases with `mcp-deploy.json` + `worker.mjs`)
+2. **Configure** -- Enter any required secrets (API keys, tokens)
+3. **Deploy** -- Click Deploy. You'll get back:
+   - **MCP URL** (e.g., `https://your-mcp.yoursubdomain.workers.dev/mcp`)
+   - **Bearer Token** (for authentication)
+   - **MCP URL with Token** (ready to paste into Claude Desktop)
+
+## Connecting to Claude Desktop
+
+1. Deploy an MCP using the web interface
+2. Copy the **MCP URL with Token** from the deployment response
+3. In Claude Desktop: **Settings > Connectors > Add custom connector**
+4. Paste the URL (e.g., `https://your-mcp.workers.dev/mcp/t/{token}`)
+5. Click **Connect** -- done!
+
+No OAuth flow needed with bearer token authentication. The token is embedded in the URL.
+
+## CLI Usage
+
+```bash
+# Start the web interface
+mcp-deploy -gui
+
+# Show help
+mcp-deploy --help
 ```
-ENCRYPTION_KEY=<64-char-hex-string>   # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-KV_REST_API_URL=<vercel-kv-url>
-KV_REST_API_TOKEN=<vercel-kv-token>
+
+After installing globally (`npm install -g .`), you can run `mcp-deploy -gui` from anywhere to start the web interface.
+
+**Future CLI commands** (coming soon):
+```bash
+mcp-deploy deploy <github-url>    # Deploy an MCP from GitHub
+mcp-deploy list                    # List deployed MCPs
+mcp-deploy status <slug>           # Check MCP status
 ```
-
-### Cloudflare API Token
-
-Create a token at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) with:
-- **Permissions:** Workers Scripts: Edit, Account Settings: Read
-- **Account Resources:** Include your account
 
 ## Architecture
 

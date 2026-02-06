@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStoredMcp, resolveMcpEntry, checkForUpdate } from "@/lib/mcp-registry";
-import { getDeployment, getMcpSecrets } from "@/lib/kv";
+import { getDeployment, getMcpSecrets } from "@/lib/store";
 
 export async function GET(
   _request: Request,

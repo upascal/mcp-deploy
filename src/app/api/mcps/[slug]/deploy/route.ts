@@ -11,9 +11,10 @@ import {
   setDeployment,
   setMcpSecrets,
   getMcpSecrets,
-} from "@/lib/kv";
+} from "@/lib/store";
 import { encrypt } from "@/lib/encryption";
 import { generateOAuthWrapper } from "@/lib/worker-oauth-wrapper";
+import { generateBearerTokenWrapper } from "@/lib/worker-bearer-wrapper";
 import { generateJWTSecret } from "@/lib/oauth/jwt";
 import { getIssuerUrl } from "@/lib/oauth/provider";
 import {
@@ -54,6 +55,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const userSecrets: Record<string, string> = body.secrets ?? {};
     const userConfig: Record<string, string> = body.config ?? {};
+    const authMode: 'bearer' | 'oauth' = body.authMode || 'bearer';
 
     // Merge with any existing secrets (so we don't lose them on redeploy)
     const existingSecrets = (await getMcpSecrets(slug)) ?? {};
@@ -62,50 +64,67 @@ export async function POST(
       ...userSecrets,
     };
 
-    // Generate bearer token (kept for backward compatibility)
+    // Generate bearer token
     const bearerToken = CloudflareDeployService.generateBearerToken();
 
-    // Generate OAuth JWT signing secret for this deployment
-    const jwtSecret = generateJWTSecret();
-    const issuerUrl = getIssuerUrl();
+    // Generate wrapper based on auth mode
+    let wrapper: string;
+    let jwtSecret: string | undefined;
+    let issuerUrl: string | undefined;
 
-    // Generate the OAuth wrapper module
-    const oauthWrapper = generateOAuthWrapper(
-      resolved.durableObjectClassName,
-      issuerUrl
-    );
+    if (authMode === 'oauth') {
+      // OAuth mode: generate JWT secret and OAuth wrapper
+      jwtSecret = generateJWTSecret();
+      issuerUrl = getIssuerUrl();
+      wrapper = generateOAuthWrapper(
+        resolved.durableObjectClassName,
+        issuerUrl
+      );
+    } else {
+      // Bearer token mode (default): simple bearer token wrapper
+      wrapper = generateBearerTokenWrapper(
+        resolved.durableObjectClassName
+      );
+    }
 
     // Get the bundle content from GitHub
     const bundleContent = await getBundleContent(resolved);
 
-    // Deploy the worker with OAuth wrapper
+    // Deploy the worker with the selected wrapper
     const service = new CloudflareDeployService(cfToken, cfAccountId);
     const { url } = await service.deployWorker(
       resolved,
       bundleContent,
-      oauthWrapper
+      wrapper
     );
 
-    // Set all secrets on the worker (including OAuth secrets)
+    // Set all secrets on the worker
     const allWorkerSecrets: Record<string, string> = {
       ...mergedSecrets,
       ...userConfig,
       BEARER_TOKEN: bearerToken,
-      OAUTH_JWT_SECRET: jwtSecret,
     };
+
+    // Add OAuth JWT secret only if using OAuth mode
+    if (authMode === 'oauth' && jwtSecret) {
+      allWorkerSecrets.OAUTH_JWT_SECRET = jwtSecret;
+    }
 
     await service.setSecrets(resolved.workerName, allWorkerSecrets);
 
-    // Store OAuth state: JWT secret and URL-to-slug mapping
     // The MCP URL is at /mcp on the worker
     const mcpUrl = `${url}/mcp`;
-    await setDeploymentJWTSecret(slug, jwtSecret);
-    // Map both the base URL and /mcp URL to this slug
-    await mapWorkerUrlToSlug(url, slug);
-    await mapWorkerUrlToSlug(mcpUrl, slug);
-    // Also map the origin (what the JWT aud will be)
-    const origin = new URL(url).origin;
-    await mapWorkerUrlToSlug(origin, slug);
+
+    // Store OAuth state only if using OAuth mode
+    if (authMode === 'oauth' && jwtSecret) {
+      await setDeploymentJWTSecret(slug, jwtSecret);
+      // Map both the base URL and /mcp URL to this slug
+      await mapWorkerUrlToSlug(url, slug);
+      await mapWorkerUrlToSlug(mcpUrl, slug);
+      // Also map the origin (what the JWT aud will be)
+      const origin = new URL(url).origin;
+      await mapWorkerUrlToSlug(origin, slug);
+    }
 
     // Store deployment record
     await setDeployment({
@@ -124,11 +143,12 @@ export async function POST(
       success: true,
       workerUrl: url,
       mcpUrl,
-      // Keep legacy fields for backward compat
+      // Bearer token connection (works for both modes)
       mcpUrlWithToken: `${url}/mcp/t/${bearerToken}`,
       bearerToken,
-      // OAuth connection info
-      oauthEnabled: true,
+      // Auth mode info
+      authMode,
+      oauthEnabled: authMode === 'oauth',
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
