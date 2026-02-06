@@ -1,117 +1,80 @@
 /**
- * Local JSON storage for OAuth state: clients, authorization codes, and JWT secrets.
- * Replaces @vercel/kv with a local file-based approach matching the main store.
+ * SQLite-backed storage for OAuth state: clients, authorization codes, and JWT secrets.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
-import { join } from "path";
+import { getDb } from "../db";
 import { encrypt, decrypt } from "../encryption";
 import type { OAuthClient, AuthorizationCode } from "./types";
-
-const DATA_DIR = join(process.cwd(), "data");
-const OAUTH_STORE_PATH = join(DATA_DIR, "oauth-store.json");
-
-interface OAuthStore {
-  clients: Record<string, { data: OAuthClient; expiresAt: number }>;
-  authCodes: Record<string, { data: AuthorizationCode; expiresAt: number }>;
-  jwtSecrets: Record<string, string>; // slug -> encrypted secret
-  urlToSlug: Record<string, string>; // workerUrl -> slug
-}
-
-const EMPTY_STORE: OAuthStore = {
-  clients: {},
-  authCodes: {},
-  jwtSecrets: {},
-  urlToSlug: {},
-};
-
-const AUTH_CODE_TTL = 600; // 10 minutes
-const CLIENT_TTL = 60 * 60 * 24 * 365; // 1 year
-
-function readStore(): OAuthStore {
-  try {
-    if (!existsSync(OAUTH_STORE_PATH)) {
-      return { ...EMPTY_STORE };
-    }
-    const raw = readFileSync(OAUTH_STORE_PATH, "utf-8");
-    return JSON.parse(raw) as OAuthStore;
-  } catch {
-    return { ...EMPTY_STORE };
-  }
-}
-
-function writeStore(store: OAuthStore): void {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
-  writeFileSync(OAUTH_STORE_PATH, JSON.stringify(store, null, 2), "utf-8");
-}
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
+
+/** Remove expired OAuth clients and auth codes. Called lazily on reads. */
+function cleanupExpired(): void {
+  const now = nowSeconds();
+  const db = getDb();
+  db.prepare("DELETE FROM oauth_clients WHERE expires_at < ?").run(now);
+  db.prepare("DELETE FROM oauth_codes WHERE expires_at < ?").run(now);
+}
+
+const AUTH_CODE_TTL = 600; // 10 minutes
+const CLIENT_TTL = 60 * 60 * 24 * 365; // 1 year
 
 // ─── OAuth Clients (Dynamic Client Registration) ───
 
 export async function getOAuthClient(
   clientId: string
 ): Promise<OAuthClient | null> {
-  const store = readStore();
-  const entry = store.clients[clientId];
-  if (!entry) return null;
-  if (entry.expiresAt < nowSeconds()) {
-    // Expired — clean up
-    delete store.clients[clientId];
-    writeStore(store);
-    return null;
-  }
-  return entry.data;
+  cleanupExpired();
+  const row = getDb()
+    .prepare(
+      "SELECT data, expires_at FROM oauth_clients WHERE client_id = ?"
+    )
+    .get(clientId) as { data: string; expires_at: number } | undefined;
+
+  if (!row) return null;
+  return JSON.parse(row.data) as OAuthClient;
 }
 
 export async function storeOAuthClient(client: OAuthClient): Promise<void> {
-  const store = readStore();
-  store.clients[client.client_id] = {
-    data: client,
-    expiresAt: nowSeconds() + CLIENT_TTL,
-  };
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO oauth_clients (client_id, data, expires_at) VALUES (?, ?, ?)"
+    )
+    .run(client.client_id, JSON.stringify(client), nowSeconds() + CLIENT_TTL);
 }
 
 export async function deleteOAuthClient(clientId: string): Promise<void> {
-  const store = readStore();
-  delete store.clients[clientId];
-  writeStore(store);
+  getDb()
+    .prepare("DELETE FROM oauth_clients WHERE client_id = ?")
+    .run(clientId);
 }
 
 // ─── Authorization Codes ───
 
 export async function storeAuthCode(code: AuthorizationCode): Promise<void> {
-  const store = readStore();
-  store.authCodes[code.code] = {
-    data: code,
-    expiresAt: nowSeconds() + AUTH_CODE_TTL,
-  };
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO oauth_codes (code, data, expires_at) VALUES (?, ?, ?)"
+    )
+    .run(code.code, JSON.stringify(code), nowSeconds() + AUTH_CODE_TTL);
 }
 
 export async function getAuthCode(
   code: string
 ): Promise<AuthorizationCode | null> {
-  const store = readStore();
-  const entry = store.authCodes[code];
-  if (!entry) return null;
-  if (entry.expiresAt < nowSeconds()) {
-    delete store.authCodes[code];
-    writeStore(store);
-    return null;
-  }
-  return entry.data;
+  cleanupExpired();
+  const row = getDb()
+    .prepare("SELECT data, expires_at FROM oauth_codes WHERE code = ?")
+    .get(code) as { data: string; expires_at: number } | undefined;
+
+  if (!row) return null;
+  return JSON.parse(row.data) as AuthorizationCode;
 }
 
 export async function deleteAuthCode(code: string): Promise<void> {
-  const store = readStore();
-  delete store.authCodes[code];
-  writeStore(store);
+  getDb().prepare("DELETE FROM oauth_codes WHERE code = ?").run(code);
 }
 
 // ─── Per-Deployment JWT Secrets ───
@@ -119,19 +82,23 @@ export async function deleteAuthCode(code: string): Promise<void> {
 export async function getDeploymentJWTSecret(
   slug: string
 ): Promise<string | null> {
-  const store = readStore();
-  const encrypted = store.jwtSecrets[slug];
-  if (!encrypted) return null;
-  return decrypt(encrypted);
+  const row = getDb()
+    .prepare("SELECT secret FROM jwt_secrets WHERE slug = ?")
+    .get(slug) as { secret: string } | undefined;
+
+  if (!row) return null;
+  return decrypt(row.secret);
 }
 
 export async function setDeploymentJWTSecret(
   slug: string,
   secret: string
 ): Promise<void> {
-  const store = readStore();
-  store.jwtSecrets[slug] = encrypt(secret);
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO jwt_secrets (slug, secret) VALUES (?, ?)"
+    )
+    .run(slug, encrypt(secret));
 }
 
 /**
@@ -141,15 +108,20 @@ export async function setDeploymentJWTSecret(
 export async function getSlugForWorkerUrl(
   workerUrl: string
 ): Promise<string | null> {
-  const store = readStore();
-  return store.urlToSlug[workerUrl] ?? null;
+  const row = getDb()
+    .prepare("SELECT slug FROM worker_url_mapping WHERE worker_url = ?")
+    .get(workerUrl) as { slug: string } | undefined;
+
+  return row?.slug ?? null;
 }
 
 export async function mapWorkerUrlToSlug(
   workerUrl: string,
   slug: string
 ): Promise<void> {
-  const store = readStore();
-  store.urlToSlug[workerUrl] = slug;
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO worker_url_mapping (worker_url, slug) VALUES (?, ?)"
+    )
+    .run(workerUrl, slug);
 }

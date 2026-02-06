@@ -1,62 +1,55 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
-import { join } from "path";
+import { getDb } from "./db";
 import type { DeploymentRecord, McpSecretsRecord, StoredMcpEntry } from "./types";
-
-// ─── Local JSON Store ───
-// Replaces Vercel KV with a simple local JSON file.
-// Data lives at <project>/data/store.json (gitignored).
-
-const DATA_DIR = join(process.cwd(), "data");
-const STORE_PATH = join(DATA_DIR, "store.json");
-
-interface Store {
-  mcps: StoredMcpEntry[];
-  deployments: Record<string, DeploymentRecord>;
-  secrets: Record<string, Record<string, string>>;
-  seededDefaults: boolean;
-  cfToken?: string;
-  cfAccountId?: string;
-}
-
-const EMPTY_STORE: Store = {
-  mcps: [],
-  deployments: {},
-  secrets: {},
-  seededDefaults: false,
-};
-
-function readStore(): Store {
-  try {
-    if (!existsSync(STORE_PATH)) {
-      return { ...EMPTY_STORE };
-    }
-    const raw = readFileSync(STORE_PATH, "utf-8");
-    return JSON.parse(raw) as Store;
-  } catch {
-    return { ...EMPTY_STORE };
-  }
-}
-
-function writeStore(store: Store): void {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
-  writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), "utf-8");
-}
 
 // ─── Deployment Records ───
 
 export async function getDeployment(
   slug: string
 ): Promise<DeploymentRecord | null> {
-  const store = readStore();
-  return store.deployments[slug] ?? null;
+  const row = getDb()
+    .prepare(
+      "SELECT slug, status, worker_url, bearer_token, deployed_at, version, error FROM deployments WHERE slug = ?"
+    )
+    .get(slug) as
+    | {
+        slug: string;
+        status: string;
+        worker_url: string | null;
+        bearer_token: string | null;
+        deployed_at: string | null;
+        version: string;
+        error: string | null;
+      }
+    | undefined;
+
+  if (!row) return null;
+
+  return {
+    slug: row.slug,
+    status: row.status as DeploymentRecord["status"],
+    workerUrl: row.worker_url,
+    bearerToken: row.bearer_token,
+    deployedAt: row.deployed_at,
+    version: row.version,
+    ...(row.error ? { error: row.error } : {}),
+  };
 }
 
 export async function setDeployment(record: DeploymentRecord): Promise<void> {
-  const store = readStore();
-  store.deployments[record.slug] = record;
-  writeStore(store);
+  getDb()
+    .prepare(
+      `INSERT OR REPLACE INTO deployments (slug, status, worker_url, bearer_token, deployed_at, version, error)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      record.slug,
+      record.status,
+      record.workerUrl,
+      record.bearerToken,
+      record.deployedAt,
+      record.version,
+      record.error ?? null
+    );
 }
 
 // ─── MCP Secrets ───
@@ -64,23 +57,36 @@ export async function setDeployment(record: DeploymentRecord): Promise<void> {
 export async function getMcpSecrets(
   slug: string
 ): Promise<McpSecretsRecord | null> {
-  const store = readStore();
-  return store.secrets[slug] ?? null;
+  const rows = getDb()
+    .prepare("SELECT key, value FROM secrets WHERE slug = ?")
+    .all(slug) as Array<{ key: string; value: string }>;
+
+  if (rows.length === 0) return null;
+
+  const result: McpSecretsRecord = {};
+  for (const row of rows) {
+    result[row.key] = row.value;
+  }
+  return result;
 }
 
 export async function setMcpSecrets(
   slug: string,
   secrets: Record<string, string>
 ): Promise<void> {
-  const store = readStore();
-  const cleaned: McpSecretsRecord = {};
-  for (const [key, val] of Object.entries(secrets)) {
-    if (val) {
-      cleaned[key] = val;
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare("DELETE FROM secrets WHERE slug = ?").run(slug);
+    const insert = db.prepare(
+      "INSERT INTO secrets (slug, key, value) VALUES (?, ?, ?)"
+    );
+    for (const [key, val] of Object.entries(secrets)) {
+      if (val) {
+        insert.run(slug, key, val);
+      }
     }
-  }
-  store.secrets[slug] = cleaned;
-  writeStore(store);
+  });
+  tx();
 }
 
 /**
@@ -96,75 +102,132 @@ export async function getMcpBearerToken(
 // ─── MCP Registry ───
 
 export async function getMcps(): Promise<StoredMcpEntry[]> {
-  const store = readStore();
-  return store.mcps;
+  const rows = getDb()
+    .prepare(
+      "SELECT slug, github_repo, release_tag, added_at, is_default FROM mcps"
+    )
+    .all() as Array<{
+    slug: string;
+    github_repo: string;
+    release_tag: string;
+    added_at: string;
+    is_default: number;
+  }>;
+
+  return rows.map((row) => ({
+    slug: row.slug,
+    githubRepo: row.github_repo,
+    releaseTag: row.release_tag,
+    addedAt: row.added_at,
+    ...(row.is_default ? { isDefault: true } : {}),
+  }));
 }
 
 export async function setMcps(mcps: StoredMcpEntry[]): Promise<void> {
-  const store = readStore();
-  store.mcps = mcps;
-  writeStore(store);
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare("DELETE FROM mcps").run();
+    const insert = db.prepare(
+      "INSERT INTO mcps (slug, github_repo, release_tag, added_at, is_default) VALUES (?, ?, ?, ?, ?)"
+    );
+    for (const mcp of mcps) {
+      insert.run(
+        mcp.slug,
+        mcp.githubRepo,
+        mcp.releaseTag,
+        mcp.addedAt,
+        mcp.isDefault ? 1 : 0
+      );
+    }
+  });
+  tx();
 }
 
 export async function addMcp(entry: StoredMcpEntry): Promise<void> {
-  const existing = await getMcps();
+  const existing = getDb()
+    .prepare("SELECT slug FROM mcps WHERE slug = ?")
+    .get(entry.slug);
 
-  if (existing.some((m) => m.slug === entry.slug)) {
+  if (existing) {
     throw new Error(`MCP with slug "${entry.slug}" already exists`);
   }
 
-  await setMcps([...existing, entry]);
+  getDb()
+    .prepare(
+      "INSERT INTO mcps (slug, github_repo, release_tag, added_at, is_default) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(
+      entry.slug,
+      entry.githubRepo,
+      entry.releaseTag,
+      entry.addedAt,
+      entry.isDefault ? 1 : 0
+    );
 }
 
 export async function removeMcp(slug: string): Promise<void> {
-  const existing = await getMcps();
-  await setMcps(existing.filter((m) => m.slug !== slug));
+  getDb().prepare("DELETE FROM mcps WHERE slug = ?").run(slug);
 }
 
 // ─── Seeding ───
 
 export async function hasSeededDefaults(): Promise<boolean> {
-  const store = readStore();
-  return store.seededDefaults;
+  const row = getDb()
+    .prepare("SELECT value FROM config WHERE key = 'seeded_defaults'")
+    .get() as { value: string } | undefined;
+  return row?.value === "1";
 }
 
 export async function markSeededDefaults(): Promise<void> {
-  const store = readStore();
-  store.seededDefaults = true;
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO config (key, value) VALUES ('seeded_defaults', '1')"
+    )
+    .run();
 }
 
 export async function resetSeededDefaults(): Promise<void> {
-  const store = readStore();
-  store.seededDefaults = false;
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO config (key, value) VALUES ('seeded_defaults', '0')"
+    )
+    .run();
 }
 
-// ─── Cloudflare Config ───
+// ─── Cloudflare Config (legacy, kept for API compat) ───
 
 export async function getCfToken(): Promise<string | null> {
-  const store = readStore();
-  return store.cfToken ?? null;
+  const row = getDb()
+    .prepare("SELECT value FROM config WHERE key = 'cf_token'")
+    .get() as { value: string } | undefined;
+  return row?.value ?? null;
 }
 
 export async function setCfToken(token: string): Promise<void> {
-  const store = readStore();
-  store.cfToken = token;
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO config (key, value) VALUES ('cf_token', ?)"
+    )
+    .run(token);
 }
 
 export async function getCfAccountId(): Promise<string | null> {
-  const store = readStore();
-  return store.cfAccountId ?? null;
+  const row = getDb()
+    .prepare("SELECT value FROM config WHERE key = 'cf_account_id'")
+    .get() as { value: string } | undefined;
+  return row?.value ?? null;
 }
 
 export async function setCfAccountId(accountId: string): Promise<void> {
-  const store = readStore();
-  store.cfAccountId = accountId;
-  writeStore(store);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO config (key, value) VALUES ('cf_account_id', ?)"
+    )
+    .run(accountId);
 }
 
 export async function isCfConfigured(): Promise<boolean> {
-  const store = readStore();
-  return !!(store.cfToken && store.cfAccountId);
+  const token = await getCfToken();
+  const accountId = await getCfAccountId();
+  return !!(token && accountId);
 }

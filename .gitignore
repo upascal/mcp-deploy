@@ -26,4 +26,9 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-reference-folder/zotero-assistant-mcp-remote
+/reference-folder/*
+
+# sqlite
+data/*.db
+data/*.db-*
+data/*.bak
