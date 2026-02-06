@@ -94,8 +94,8 @@ export async function wranglerLogin(): Promise<{
 export async function deployWorker(
   entry: ResolvedMcpEntry,
   bundleContent: string,
-  oauthWrapper: string,
-  kvNamespaceId: string
+  wrapperContent: string,
+  kvNamespaceId?: string
 ): Promise<{ url: string }> {
   const tempDir = mkdtempSync(join(tmpdir(), "mcp-deploy-"));
 
@@ -117,12 +117,14 @@ export async function deployWorker(
           },
         ],
       },
-      kv_namespaces: [
-        {
-          binding: "OAUTH_KV",
-          id: kvNamespaceId,
-        },
-      ],
+      ...(kvNamespaceId && {
+        kv_namespaces: [
+          {
+            binding: "OAUTH_KV",
+            id: kvNamespaceId,
+          },
+        ],
+      }),
     };
 
     // Only include migrations for new workers
@@ -143,7 +145,7 @@ export async function deployWorker(
       join(tempDir, "wrangler.jsonc"),
       JSON.stringify(wranglerConfig, null, 2)
     );
-    writeFileSync(join(tempDir, "index.mjs"), oauthWrapper);
+    writeFileSync(join(tempDir, "index.mjs"), wrapperContent);
     writeFileSync(join(tempDir, "original.mjs"), bundleContent);
 
     // Run wrangler deploy
