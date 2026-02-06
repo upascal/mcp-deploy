@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/* Fix browser autofill background color to match dark theme */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #1f2937 inset !important; /* bg-gray-800 */
+  -webkit-text-fill-color: #f3f4f6 !important; /* text-gray-100 */
+  caret-color: #f3f4f6 !important;
+}
+
+/* Ensure password reveal buttons don't cause layout shifts */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+/* Smooth transitions for form elements */
+input,
+select,
+button {
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+/* Remove default focus outline in favor of custom ring styles */
+input:focus,
+select:focus,
+button:focus {
+  outline: none;
+}
+
+/* Ensure consistent dark background for form controls */
+input[type="password"],
+input[type="text"],
+input[type="email"] {
+  background-color: #1f2937; /* bg-gray-800 */
+  color-scheme: dark;
+}

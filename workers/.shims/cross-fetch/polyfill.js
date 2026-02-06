@@ -1,0 +1,1 @@
+// No-op: Workers have native fetch
