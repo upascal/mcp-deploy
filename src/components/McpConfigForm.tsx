@@ -35,7 +35,7 @@ export function McpConfigForm({ fields, values, onChange }: McpConfigFormProps) 
               onChange={(e) =>
                 onChange({ ...values, [field.key]: e.target.value })
               }
-              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
             >
               {field.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -50,7 +50,7 @@ export function McpConfigForm({ fields, values, onChange }: McpConfigFormProps) 
               onChange={(e) =>
                 onChange({ ...values, [field.key]: e.target.value })
               }
-              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
             />
           )}
         </div>
@@ -92,7 +92,7 @@ function MultiselectField({
           onClick={() => toggle(opt.value)}
           className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
             selected.has(opt.value)
-              ? "bg-blue-500/15 border-blue-500/40 text-blue-400"
+              ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-400"
               : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600"
           }`}
         >

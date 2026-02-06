@@ -143,7 +143,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
                 }
               }}
               placeholder="owner/repo or https://github.com/owner/repo"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               autoFocus
             />
             <p className="text-xs text-gray-500 mt-1.5">
@@ -179,7 +179,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
               <button
                 onClick={validateRepo}
                 disabled={!repo.trim() || validating}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
               >
                 {validating ? "Checking..." : "Check Repository"}
               </button>

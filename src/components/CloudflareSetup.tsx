@@ -79,11 +79,11 @@ export function CloudflareSetup() {
         </h2>
         <p className="text-sm text-gray-400 mb-2">
           Create a Cloudflare API token with{" "}
-          <code className="text-blue-400 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
+          <code className="text-indigo-400 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
             Workers Scripts:Edit
           </code>{" "}
           and{" "}
-          <code className="text-blue-400 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
+          <code className="text-indigo-400 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
             Account Settings:Read
           </code>{" "}
           permissions.{" "}
@@ -91,7 +91,7 @@ export function CloudflareSetup() {
             href="https://dash.cloudflare.com/profile/api-tokens"
             target="_blank"
             rel="noopener"
-            className="text-blue-400 hover:underline"
+            className="text-indigo-400 hover:underline"
           >
             Create token &rarr;
           </a>
@@ -113,8 +113,8 @@ export function CloudflareSetup() {
               <li>
                 <strong className="text-gray-300">Permissions</strong> — you need two rows:
                 <ul className="list-disc list-inside ml-4 mt-1 space-y-1 text-gray-500">
-                  <li>Row 1: <code className="text-blue-400 bg-gray-800 px-1 rounded text-xs">Account</code> → <code className="text-blue-400 bg-gray-800 px-1 rounded text-xs">Workers Scripts</code> → <code className="text-blue-400 bg-gray-800 px-1 rounded text-xs">Edit</code></li>
-                  <li>Row 2: Click <span className="text-blue-400">+ Add more</span>, then: <code className="text-blue-400 bg-gray-800 px-1 rounded text-xs">Account</code> → <code className="text-blue-400 bg-gray-800 px-1 rounded text-xs">Account Settings</code> → <code className="text-blue-400 bg-gray-800 px-1 rounded text-xs">Read</code></li>
+                  <li>Row 1: <code className="text-indigo-400 bg-gray-800 px-1 rounded text-xs">Account</code> → <code className="text-indigo-400 bg-gray-800 px-1 rounded text-xs">Workers Scripts</code> → <code className="text-indigo-400 bg-gray-800 px-1 rounded text-xs">Edit</code></li>
+                  <li>Row 2: Click <span className="text-indigo-400">+ Add more</span>, then: <code className="text-indigo-400 bg-gray-800 px-1 rounded text-xs">Account</code> → <code className="text-indigo-400 bg-gray-800 px-1 rounded text-xs">Account Settings</code> → <code className="text-indigo-400 bg-gray-800 px-1 rounded text-xs">Read</code></li>
                 </ul>
               </li>
               <li>
@@ -142,7 +142,7 @@ export function CloudflareSetup() {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="Paste your Cloudflare API token"
-            className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
           />
 
           {error && (
@@ -159,7 +159,7 @@ export function CloudflareSetup() {
           <button
             type="submit"
             disabled={!token || loading}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors"
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors"
           >
             {loading ? "Validating..." : "Save & Validate"}
           </button>

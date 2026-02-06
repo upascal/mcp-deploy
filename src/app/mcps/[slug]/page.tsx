@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SecretForm } from "@/components/SecretForm";
 import { McpConfigForm } from "@/components/McpConfigForm";
@@ -100,6 +100,38 @@ export default function McpDetailPage({
     healthy: boolean;
     status?: number;
   } | null>(null);
+
+  // Track which keys have been auto-tested to avoid duplicate tests
+  const autoTestedRef = useRef<Set<string>>(new Set());
+
+  // Auto-test when any API key field with a test spec loses focus
+  function handleSecretBlur(field: SecretField) {
+    const value = secretValues[field.key];
+    if (
+      field.test &&
+      value?.trim() &&
+      !autoTestedRef.current.has(field.key) &&
+      canTestField(field)
+    ) {
+      autoTestedRef.current.add(field.key);
+      testConnection(field, true);
+    }
+  }
+
+  // Reset auto-test tracking when value changes significantly
+  function handleSecretChange(key: string, newValue: string) {
+    const oldValue = secretValues[key] ?? "";
+    if (Math.abs(newValue.length - oldValue.length) > 5 || !newValue) {
+      autoTestedRef.current.delete(key);
+      if (testResults[key]) {
+        setTestResults({
+          ...testResults,
+          [key]: undefined as unknown as { success: boolean; message: string },
+        });
+      }
+    }
+    setSecretValues({ ...secretValues, [key]: newValue });
+  }
 
   async function testConnection(field: SecretField, isAutoTest = false) {
     if (!field.test) return;
@@ -250,7 +282,7 @@ export default function McpDetailPage({
   });
 
   // Check if a field has all its dependencies filled (for {{FIELD_KEY}} substitution)
-  const canTestField = (field: SecretField): boolean => {
+  function canTestField(field: SecretField): boolean {
     if (!field.test) return false;
     if (!secretValues[field.key]?.trim()) return false;
 
@@ -271,7 +303,7 @@ export default function McpDetailPage({
     }
 
     return true;
-  };
+  }
 
   return (
     <div className="space-y-8">
@@ -290,7 +322,7 @@ export default function McpDetailPage({
                 href={`https://github.com/${data.githubRepo}`}
                 target="_blank"
                 rel="noopener"
-                className="text-blue-400 hover:underline"
+                className="text-indigo-400 hover:underline"
               >
                 Source &rarr;
               </a>
@@ -330,12 +362,12 @@ export default function McpDetailPage({
 
       {/* Update Available Banner */}
       {data.updateAvailable && data.deployedVersion && data.latestVersion && (
-        <div className="border border-amber-500/30 bg-amber-500/5 rounded-xl p-4">
+        <div className="border border-teal-500/30 bg-teal-500/5 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center">
                 <svg
-                  className="w-4 h-4 text-amber-400"
+                  className="w-4 h-4 text-teal-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -349,7 +381,7 @@ export default function McpDetailPage({
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-medium text-amber-400">
+                <p className="text-sm font-medium text-teal-400">
                   Update Available
                 </p>
                 <p className="text-xs text-gray-400">
@@ -360,7 +392,7 @@ export default function McpDetailPage({
             <button
               onClick={handleDeploy}
               disabled={deploying}
-              className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-sm font-medium rounded-lg transition-colors"
+              className="px-4 py-2 bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/30 text-teal-400 text-sm font-medium rounded-lg transition-colors"
             >
               {deploying ? "Updating..." : "Update Now"}
             </button>
@@ -403,7 +435,7 @@ export default function McpDetailPage({
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-1.5">
                     {field.label}
                     {field.required ? (
-                      <span className="text-blue-400 text-xs">required</span>
+                      <span className="text-indigo-400 text-xs">required</span>
                     ) : (
                       <span className="text-gray-500 text-xs">optional</span>
                     )}
@@ -418,7 +450,7 @@ export default function McpDetailPage({
                             href={field.helpUrl}
                             target="_blank"
                             rel="noopener"
-                            className="text-blue-400 hover:underline"
+                            className="text-indigo-400 hover:underline"
                           >
                             Get key &rarr;
                           </a>
@@ -441,13 +473,11 @@ export default function McpDetailPage({
                         data-lpignore="true"
                         value={secretValues[field.key] ?? ""}
                         onChange={(e) =>
-                          setSecretValues({
-                            ...secretValues,
-                            [field.key]: e.target.value,
-                          })
+                          handleSecretChange(field.key, e.target.value)
                         }
+                        onBlur={() => handleSecretBlur(field)}
                         placeholder={field.placeholder}
-                        className="w-full px-4 py-2.5 pr-10 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="w-full px-4 py-2.5 pr-10 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       />
                       {field.type === "password" && (
                         <button
@@ -510,7 +540,7 @@ export default function McpDetailPage({
           <button
             onClick={handleDeploy}
             disabled={deploying}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors"
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors"
           >
             {deploying
               ? "Deploying..."

@@ -92,7 +92,7 @@ export function ClaudeConfigSnippet({
             onClick={() => setTab(t.id)}
             className={`px-4 py-2.5 text-xs font-medium transition-colors ${
               tab === t.id
-                ? "bg-gray-800 text-blue-400 border-b-2 border-blue-400"
+                ? "bg-gray-800 text-indigo-400 border-b-2 border-indigo-400"
                 : "text-gray-500 hover:text-gray-300"
             }`}
           >
@@ -112,7 +112,7 @@ export function ClaudeConfigSnippet({
               and paste this URL:
             </p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-gray-800 rounded-lg text-sm text-blue-400 break-all">
+              <code className="flex-1 px-3 py-2 bg-gray-800 rounded-lg text-sm text-indigo-400 break-all">
                 {mcpUrl}
               </code>
               <button
@@ -141,7 +141,7 @@ export function ClaudeConfigSnippet({
               and paste this URL:
             </p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-gray-800 rounded-lg text-sm text-blue-400 break-all">
+              <code className="flex-1 px-3 py-2 bg-gray-800 rounded-lg text-sm text-indigo-400 break-all">
                 {mcpUrlWithToken}
               </code>
               <button
@@ -161,7 +161,7 @@ export function ClaudeConfigSnippet({
           <div className="space-y-3">
             <p className="text-sm text-gray-400">
               Add to your{" "}
-              <code className="text-blue-400">claude_desktop_config.json</code>:
+              <code className="text-indigo-400">claude_desktop_config.json</code>:
             </p>
             <div className="relative">
               <pre className="px-4 py-3 bg-gray-800 rounded-lg text-xs text-gray-300 overflow-x-auto">
@@ -208,13 +208,13 @@ export function ClaudeConfigSnippet({
               {oauthEnabled ? (
                 <>
                   Fallback: static bearer token via{" "}
-                  <code className="text-blue-400">mcp-remote</code>. Use this
+                  <code className="text-indigo-400">mcp-remote</code>. Use this
                   if your client doesn&apos;t support OAuth.
                 </>
               ) : (
                 <>
                   Add to your{" "}
-                  <code className="text-blue-400">
+                  <code className="text-indigo-400">
                     claude_desktop_config.json
                   </code>
                   :

@@ -31,6 +31,9 @@ cp .env.example .env.local
 
 # Run dev server
 npm run dev
+
+# Kill the server 
+kill -9 $(pgrep -f '^next-server')
 ```
 
 ### Environment Variables

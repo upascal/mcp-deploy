@@ -136,13 +136,11 @@ export function SecretForm({
     }
   }
 
-  // Auto-test when API key field loses focus (blur) and has a value
-  // Only auto-test for required fields, not optional ones
+  // Auto-test when any API key field with a test spec loses focus (blur)
   function handleBlur(field: SecretField) {
     const value = values[field.key];
     if (
       field.test &&
-      field.required &&
       value?.trim() &&
       !autoTestedRef.current.has(field.key)
     ) {
@@ -235,7 +233,7 @@ export function SecretForm({
             <label className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-1.5">
               {field.label}
               {field.required ? (
-                <span className="text-blue-400 text-xs">required</span>
+                <span className="text-indigo-400 text-xs">required</span>
               ) : (
                 <span className="text-gray-500 text-xs">optional</span>
               )}
@@ -250,7 +248,7 @@ export function SecretForm({
                       href={field.helpUrl}
                       target="_blank"
                       rel="noopener"
-                      className="text-blue-400 hover:underline"
+                      className="text-indigo-400 hover:underline"
                     >
                       Get key &rarr;
                     </a>
@@ -299,7 +297,7 @@ export function SecretForm({
                     }
                     onBlur={() => handleBlur(field)}
                     placeholder={field.placeholder}
-                    className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
                 {/* Test button - only show when there's a test spec and a value to test */}
@@ -369,7 +367,7 @@ export function SecretForm({
         <button
           type="submit"
           disabled={loading}
-          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
         >
           {loading ? "Saving..." : "Save Changes"}
         </button>

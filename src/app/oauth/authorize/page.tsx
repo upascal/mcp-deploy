@@ -29,9 +29,9 @@ function AuthorizeContent() {
         <div className="border border-gray-800 rounded-2xl bg-gray-900/80 p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
+            <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-4">
               <svg
-                className="w-6 h-6 text-blue-400"
+                className="w-6 h-6 text-indigo-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -50,7 +50,7 @@ function AuthorizeContent() {
             <p className="text-gray-400 text-sm mt-2">
               An application is requesting access to:
             </p>
-            <p className="text-blue-400 font-mono text-sm mt-1">
+            <p className="text-indigo-400 font-mono text-sm mt-1">
               {resourceName}
             </p>
           </div>
@@ -108,7 +108,7 @@ function AuthorizeContent() {
                   name="password"
                   autoComplete="current-password"
                   placeholder="Enter your deploy password"
-                  className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   The password configured in your mcp-deploy instance.
@@ -127,7 +127,7 @@ function AuthorizeContent() {
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Authorize
                 </button>

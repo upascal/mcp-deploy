@@ -17,7 +17,7 @@ export default function RootLayout({
         <nav className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50">
           <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
             <a href="/" className="text-lg font-semibold tracking-tight">
-              <span className="text-blue-400">MCP</span> Deploy
+              <span className="text-indigo-400">MCP</span> Deploy
             </a>
             <div className="flex gap-6 text-sm">
               <a href="/" className="text-gray-400 hover:text-gray-100 transition-colors">
