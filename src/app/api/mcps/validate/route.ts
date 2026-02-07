@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  validateGitHubRepo,
+  fetchMcpMetadata,
   parseGitHubRepo,
 } from "@/lib/github-releases";
 
 /**
  * Validate a GitHub repository has proper MCP releases.
+ * On success, returns full metadata so the add route can skip re-fetching.
  *
  * GET /api/mcps/validate?repo=owner/repo
  */
@@ -33,23 +34,30 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const result = await validateGitHubRepo(repo);
+    // Fetch full metadata in one shot — validates and gets name/version
+    const { metadata, version } = await fetchMcpMetadata(repo);
 
     return NextResponse.json({
-      valid: result.valid,
+      valid: true,
       repo,
-      name: result.name,
-      version: result.latestVersion,
-      hasReleases: result.hasReleases,
-      hasMcpDeployJson: result.hasMcpDeployJson,
-      hasWorkerBundle: result.hasWorkerBundle,
-      error: result.error,
+      name: metadata.name,
+      slug: metadata.worker.name,
+      version,
+      hasReleases: true,
+      hasMcpDeployJson: true,
+      hasWorkerBundle: true,
     });
   } catch (error) {
-    console.error("Validate repo error:", error);
-    return NextResponse.json(
-      { valid: false, error: "Failed to validate repository" },
-      { status: 500 }
-    );
+    // Distinguish between "no releases" and other errors
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const isNotFound = message.includes("not found") || message.includes("no releases");
+
+    return NextResponse.json({
+      valid: false,
+      hasReleases: !isNotFound,
+      hasMcpDeployJson: !message.includes("missing mcp-deploy.json"),
+      hasWorkerBundle: !message.includes("missing worker.mjs"),
+      error: message,
+    });
   }
 }

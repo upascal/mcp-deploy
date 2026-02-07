@@ -18,6 +18,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
     name?: string;
     version?: string;
     repo?: string;
+    slug?: string;
   } | null>(null);
 
   const resetState = () => {
@@ -52,6 +53,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
           name: data.name,
           version: data.version,
           repo: data.repo,
+          slug: data.slug,
         });
       } else {
         setError(data.error || "Invalid repository");
@@ -74,7 +76,10 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
       const res = await fetch("/api/mcps/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ githubRepo: validation.repo || repo.trim() }),
+        body: JSON.stringify({
+          githubRepo: validation.repo || repo.trim(),
+          slug: validation.slug,
+        }),
       });
 
       const data = await res.json();

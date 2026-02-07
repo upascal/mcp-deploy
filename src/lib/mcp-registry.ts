@@ -1,5 +1,5 @@
 import type { McpRegistryEntry, ResolvedMcpEntry, StoredMcpEntry } from "./types";
-import { getMcps, addMcp, hasSeededDefaults, markSeededDefaults } from "./store";
+import { getMcps, addMcp, hasSeededDefaults, markSeededDefaults, getCachedMetadata, setCachedMetadata } from "./store";
 import { fetchMcpMetadata, getLatestVersion } from "./github-releases";
 
 /**
@@ -66,14 +66,27 @@ export async function getStoredMcp(
 
 /**
  * Resolve a stored MCP entry to a full entry with all metadata from GitHub.
+ * Uses a SQLite cache (5-minute TTL) to avoid redundant GitHub API calls.
  */
 export async function resolveMcpEntry(
   entry: StoredMcpEntry
 ): Promise<ResolvedMcpEntry> {
-  const { metadata, bundleUrl, version } = await fetchMcpMetadata(
-    entry.githubRepo,
-    entry.releaseTag ?? "latest"
-  );
+  // Check cache first
+  let cached = getCachedMetadata(entry.slug);
+  if (!cached) {
+    const fresh = await fetchMcpMetadata(
+      entry.githubRepo,
+      entry.releaseTag ?? "latest"
+    );
+    cached = {
+      metadata: fresh.metadata,
+      bundleUrl: fresh.bundleUrl,
+      version: fresh.version,
+    };
+    setCachedMetadata(entry.slug, cached);
+  }
+
+  const { metadata, bundleUrl, version } = cached;
 
   return {
     slug: entry.slug,

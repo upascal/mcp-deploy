@@ -164,20 +164,12 @@ export async function validateGitHubRepo(
       };
     }
 
-    // Fetch metadata to get the name
-    const metadataAsset = release.assets.find(
-      (a) => a.name === "mcp-deploy.json"
-    );
-    const metadataResponse = await fetch(metadataAsset!.browser_download_url);
-    const metadata: McpMetadata = await metadataResponse.json();
-
     return {
       valid: true,
       hasReleases: true,
       hasMcpDeployJson: true,
       hasWorkerBundle: true,
       latestVersion: release.tag_name,
-      name: metadata.name,
     };
   } catch (err) {
     return {

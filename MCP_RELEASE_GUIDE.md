@@ -26,10 +26,9 @@ npm run release        # Builds and copies worker.mjs + mcp-deploy.json to root
 ```
 
 ### DEFAULT_MCPS
-The mcp-deploy app now seeds the zotero-assistant MCP by default:
+The mcp-deploy app seeds these MCPs by default:
 - `upascal/zotero-assistant-mcp-remote`
-
-Paper Search is NOT in DEFAULT_MCPS because it's not yet on GitHub. Add it manually once it's published.
+- `upascal/paper-search-mcp-remote`
 
 ## How to Create GitHub Releases
 
@@ -118,13 +117,7 @@ The `mcp-deploy.json` structure:
 
 ## Deploying Paper Search
 
-Paper Search is not yet on GitHub. To add it:
-
-1. Create a GitHub repo: `upascal/paper-search-mcp`
-2. Push the code
-3. Build: `npm run release`
-4. Create a release with `worker.mjs` and `mcp-deploy.json`
-5. Update mcp-deploy's DEFAULT_MCPS (or add manually through UI)
+Paper Search must have a GitHub release with `worker.mjs` and `mcp-deploy.json` assets.
 
 ## Troubleshooting
 
@@ -185,13 +178,7 @@ Paper Search is not yet on GitHub. To add it:
 
 3. Wait for the workflow to complete
 
-4. Once the release is ready, update mcp-deploy's DEFAULT_MCPS to include:
-   ```javascript
-   {
-     slug: "paper-search",
-     githubRepo: "upascal/paper-search-mcp-remote",
-   }
-   ```
+4. Verify the release assets include `worker.mjs` and `mcp-deploy.json`.
 
 ## Local Testing (Optional)
 

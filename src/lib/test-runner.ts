@@ -67,12 +67,20 @@ export async function runTest(
       body = substitutePlaceholders(spec.body, value, allValues, false);
     }
 
-    // Make the request
-    const response = await fetch(url, {
-      method: spec.method,
-      headers,
-      body,
-    });
+    // Make the request with a 10-second timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: spec.method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     // Check for success
     if (spec.success.includes(response.status)) {
@@ -91,6 +99,9 @@ export async function runTest(
       error: `API returned status ${response.status}`,
     };
   } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { success: false, error: "Connection timed out (10s)" };
+    }
     return {
       success: false,
       error: err instanceof Error ? err.message : "Connection failed",

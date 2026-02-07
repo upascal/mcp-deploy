@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  validateGitHubRepo,
   fetchMcpMetadata,
   parseGitHubRepo,
 } from "@/lib/github-releases";
@@ -10,13 +9,21 @@ import { addMcp, getMcps } from "@/lib/store";
  * Add a new MCP from a GitHub repository.
  *
  * POST /api/mcps/add
- * Body: { githubRepo: string, releaseTag?: string }
+ * Body: { githubRepo: string, slug?: string, releaseTag?: string }
+ *
+ * If `slug` is provided (from prior validation), skips re-fetching metadata
+ * just for the slug. Still fetches metadata once for the name/version response.
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { githubRepo: repoInput, releaseTag = "latest" } = body as {
+    const {
+      githubRepo: repoInput,
+      slug: prevalidatedSlug,
+      releaseTag = "latest",
+    } = body as {
       githubRepo: string;
+      slug?: string;
       releaseTag?: string;
     };
 
@@ -36,37 +43,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate the repo has proper releases
-    const validation = await validateGitHubRepo(repo);
-    if (!validation.valid) {
-      return NextResponse.json(
-        {
-          error: validation.error || "Repository does not have valid MCP releases",
-          hasReleases: validation.hasReleases,
-          hasMcpDeployJson: validation.hasMcpDeployJson,
-          hasWorkerBundle: validation.hasWorkerBundle,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Fetch full metadata to get the worker name (used as slug)
-    const { metadata, version } = await fetchMcpMetadata(repo, releaseTag);
-    const slug = metadata.worker.name;
-
-    // Check if already added
+    // Check if already added (fast check before any network calls)
     const existing = await getMcps();
-    if (existing.some((m) => m.slug === slug)) {
+    if (existing.some((m) => m.githubRepo === repo)) {
       return NextResponse.json(
-        { error: `"${metadata.name}" is already added` },
+        { error: `Repository ${repo} is already added` },
         { status: 409 }
       );
     }
 
-    // Check if same repo is already added (different slug somehow)
-    if (existing.some((m) => m.githubRepo === repo)) {
+    if (prevalidatedSlug && existing.some((m) => m.slug === prevalidatedSlug)) {
       return NextResponse.json(
-        { error: `Repository ${repo} is already added` },
+        { error: `MCP "${prevalidatedSlug}" is already added` },
+        { status: 409 }
+      );
+    }
+
+    // Fetch metadata (single round-trip: release + metadata asset)
+    const { metadata, version } = await fetchMcpMetadata(repo, releaseTag);
+    const slug = metadata.worker.name;
+
+    // Double-check slug uniqueness (in case prevalidatedSlug wasn't provided)
+    if (!prevalidatedSlug && existing.some((m) => m.slug === slug)) {
+      return NextResponse.json(
+        { error: `"${metadata.name}" is already added` },
         { status: 409 }
       );
     }

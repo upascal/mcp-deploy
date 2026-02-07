@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import {
   validateAuthorizeParams,
   generateAuthCode,
 } from "@/lib/oauth/provider";
 import { getOAuthClient } from "@/lib/oauth/store";
+
+function constantTimeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    // Compare against self to maintain constant time, then return false
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
 
 /**
  * Handle user consent approval.
@@ -24,7 +36,7 @@ export async function POST(request: Request) {
     const oauthPassword = process.env.OAUTH_PASSWORD;
     if (oauthPassword) {
       const providedPassword = params.password ?? "";
-      if (providedPassword !== oauthPassword) {
+      if (!constantTimeCompare(providedPassword, oauthPassword)) {
         // Re-render the consent page with an error
         const errorUrl = new URL("/oauth/authorize", request.url);
         errorUrl.searchParams.set("client_id", params.client_id ?? "");

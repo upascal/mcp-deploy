@@ -100,6 +100,9 @@ export default function McpDetailPage({
     healthy: boolean;
     status?: number;
   } | null>(null);
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
 
   // Track which keys have been auto-tested to avoid duplicate tests
   const autoTestedRef = useRef<Set<string>>(new Set());
@@ -129,6 +132,14 @@ export default function McpDetailPage({
           [key]: undefined as unknown as { success: boolean; message: string },
         });
       }
+    }
+    // Clear validation error for this field on change
+    if (validationErrors[key]) {
+      setValidationErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
     }
     setSecretValues({ ...secretValues, [key]: newValue });
   }
@@ -219,6 +230,8 @@ export default function McpDetailPage({
   }, [slug, data?.deployment?.status]);
 
   async function handleDeploy() {
+    if (!isDeployed && !validateForm()) return;
+
     setDeploying(true);
     setDeployError(null);
     setDeployResult(null);
@@ -280,6 +293,29 @@ export default function McpDetailPage({
     if (!field.forPlatform) return true; // Show fields without platform restriction
     return enabledPlatforms.has(field.forPlatform); // Only show if platform is enabled
   });
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function validateForm(): boolean {
+    const errors: Record<string, string> = {};
+    for (const field of visibleSecrets) {
+      const value = secretValues[field.key]?.trim() ?? "";
+      if (field.required && !value) {
+        errors[field.key] = `${field.label} is required`;
+      } else if (field.type === "email" && value && !EMAIL_REGEX.test(value)) {
+        errors[field.key] = "Enter a valid email address";
+      }
+    }
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  // For initial deploys, check if any required fields are still empty
+  const hasRequiredFieldsMissing =
+    !isDeployed &&
+    visibleSecrets.some(
+      (f) => f.required && !secretValues[f.key]?.trim()
+    );
 
   // Check if a field has all its dependencies filled (for {{FIELD_KEY}} substitution)
   function canTestField(field: SecretField): boolean {
@@ -426,11 +462,7 @@ export default function McpDetailPage({
         <div className="border border-gray-800 rounded-xl p-6 bg-gray-900/50">
           <h2 className="text-lg font-semibold mb-4">API Keys</h2>
           <div className="space-y-4">
-            {visibleSecrets.map((field) => {
-              const hasTestSpec = !!field.test;
-              const canTest = canTestField(field);
-
-              return (
+            {visibleSecrets.map((field) => (
                 <div key={field.key}>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-1.5">
                     {field.label}
@@ -477,7 +509,11 @@ export default function McpDetailPage({
                         }
                         onBlur={() => handleSecretBlur(field)}
                         placeholder={field.placeholder}
-                        className="w-full px-4 py-2.5 pr-10 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        className={`w-full px-4 py-2.5 pr-10 bg-gray-800 border rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 ${
+                          validationErrors[field.key]
+                            ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                            : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
+                        }`}
                       />
                       {field.type === "password" && (
                         <button
@@ -494,16 +530,6 @@ export default function McpDetailPage({
                         </button>
                       )}
                     </div>
-                    {hasTestSpec && canTest && (
-                      <button
-                        type="button"
-                        onClick={() => testConnection(field)}
-                        disabled={testingKey === field.key}
-                        className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-                      >
-                        {testingKey === field.key ? "Testing..." : "Test"}
-                      </button>
-                    )}
                   </div>
                   {testResults[field.key] && (
                     <p
@@ -517,9 +543,13 @@ export default function McpDetailPage({
                       {testResults[field.key].message}
                     </p>
                   )}
+                  {validationErrors[field.key] && (
+                    <p className="text-xs mt-1.5 text-red-400">
+                      {validationErrors[field.key]}
+                    </p>
+                  )}
                 </div>
-              );
-            })}
+              ))}
           </div>
         </div>
       )}
@@ -539,7 +569,7 @@ export default function McpDetailPage({
           </div>
           <button
             onClick={handleDeploy}
-            disabled={deploying}
+            disabled={deploying || hasRequiredFieldsMissing}
             className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors"
           >
             {deploying

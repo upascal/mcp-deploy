@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { removeMcp } from "@/lib/store";
+import { getDeployment, removeMcp } from "@/lib/store";
+import { deleteWorker } from "@/lib/wrangler";
 
 /**
  * Remove an MCP from the registry.
+ * Deletes the Cloudflare worker (best-effort) and cascade-deletes all related data.
  *
  * DELETE /api/mcps/[slug]/remove
  */
@@ -12,6 +14,18 @@ export async function DELETE(
 ) {
   try {
     const { slug } = await params;
+
+    // Best-effort: delete the Cloudflare worker if deployed
+    const deployment = await getDeployment(slug);
+    if (deployment?.workerUrl) {
+      const workerName = slug;
+      try {
+        await deleteWorker(workerName);
+      } catch (err) {
+        // Worker may already be gone — log and continue
+        console.warn(`[remove] Failed to delete worker "${workerName}":`, err);
+      }
+    }
 
     await removeMcp(slug);
 

@@ -170,6 +170,8 @@ export function SecretForm({
     setEditing({ ...editing, [key]: true });
   }
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -187,6 +189,16 @@ export function SecretForm({
       setMessage({ type: "error", text: "No changes to save." });
       setLoading(false);
       return;
+    }
+
+    // Validate email fields
+    for (const field of visibleFields) {
+      const val = secrets[field.key];
+      if (field.type === "email" && val && !EMAIL_REGEX.test(val)) {
+        setMessage({ type: "error", text: `${field.label}: enter a valid email address` });
+        setLoading(false);
+        return;
+      }
     }
 
     try {
