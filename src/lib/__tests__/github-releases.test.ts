@@ -122,3 +122,140 @@ describe('validateGitHubRepo', () => {
         expect(result.hasReleases).toBe(false);
     });
 });
+
+describe('fetchMcpMetadata - error paths', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should handle 404 response from GitHub', async () => {
+        (global.fetch as any).mockResolvedValueOnce({
+            ok: false,
+            status: 404,
+            statusText: 'Not Found'
+        });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow();
+    });
+
+    it('should handle 403 rate limit response', async () => {
+        (global.fetch as any).mockResolvedValueOnce({
+            ok: false,
+            status: 403,
+            statusText: 'Forbidden'
+        });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow();
+    });
+
+    it('should handle network timeout', async () => {
+        (global.fetch as any).mockRejectedValueOnce(new Error('Request timeout'));
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow('Request timeout');
+    });
+
+    it('should handle invalid JSON in release response', async () => {
+        (global.fetch as any).mockResolvedValueOnce({
+            ok: true,
+            json: async () => { throw new Error('Invalid JSON'); }
+        });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow();
+    });
+
+    it('should handle invalid JSON in metadata response', async () => {
+        const mockRelease = {
+            tag_name: 'v1.0.0',
+            assets: [
+                { name: 'mcp-deploy.json', browser_download_url: 'https://example.com/metadata.json' },
+                { name: 'worker.mjs', browser_download_url: 'https://example.com/worker.mjs' },
+            ],
+        };
+
+        (global.fetch as any)
+            .mockResolvedValueOnce({ ok: true, json: async () => mockRelease })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => { throw new Error('Malformed JSON'); }
+            });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow();
+    });
+
+    it('should handle empty assets array', async () => {
+        const mockRelease = {
+            tag_name: 'v1.0.0',
+            assets: [],
+        };
+
+        (global.fetch as any).mockResolvedValueOnce({ ok: true, json: async () => mockRelease });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow('missing mcp-deploy.json');
+    });
+
+    it('should handle missing tag_name in release', async () => {
+        const mockRelease = {
+            assets: [
+                { name: 'mcp-deploy.json', browser_download_url: 'https://example.com/metadata.json' },
+                { name: 'worker.mjs', browser_download_url: 'https://example.com/worker.mjs' },
+            ],
+        };
+
+        (global.fetch as any).mockResolvedValueOnce({ ok: true, json: async () => mockRelease });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow();
+    });
+
+    it('should handle missing browser_download_url in assets', async () => {
+        const mockRelease = {
+            tag_name: 'v1.0.0',
+            assets: [
+                { name: 'mcp-deploy.json' },
+                { name: 'worker.mjs' },
+            ],
+        };
+
+        (global.fetch as any).mockResolvedValueOnce({ ok: true, json: async () => mockRelease });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow();
+    });
+
+    it('should handle metadata fetch failure', async () => {
+        const mockRelease = {
+            tag_name: 'v1.0.0',
+            assets: [
+                { name: 'mcp-deploy.json', browser_download_url: 'https://example.com/metadata.json' },
+                { name: 'worker.mjs', browser_download_url: 'https://example.com/worker.mjs' },
+            ],
+        };
+
+        (global.fetch as any)
+            .mockResolvedValueOnce({ ok: true, json: async () => mockRelease })
+            .mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+        await expect(fetchMcpMetadata('owner/repo')).rejects.toThrow();
+    });
+
+    it('should return incomplete metadata without validation', async () => {
+        const mockRelease = {
+            tag_name: 'v1.0.0',
+            assets: [
+                { name: 'mcp-deploy.json', browser_download_url: 'https://example.com/metadata.json' },
+                { name: 'worker.mjs', browser_download_url: 'https://example.com/worker.mjs' },
+            ],
+        };
+
+        const incompleteMetadata = {
+            name: 'Test MCP',
+            // Missing worker field and other required fields
+        };
+
+        (global.fetch as any)
+            .mockResolvedValueOnce({ ok: true, json: async () => mockRelease })
+            .mockResolvedValueOnce({ ok: true, json: async () => incompleteMetadata });
+
+        // The function doesn't validate metadata structure, just returns it
+        const result = await fetchMcpMetadata('owner/repo');
+        expect(result.metadata.name).toBe('Test MCP');
+    });
+});

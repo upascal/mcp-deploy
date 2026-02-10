@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     // Verify the client exists
-    const client = await getOAuthClient(validated.client_id);
+    const client = getOAuthClient(validated.client_id);
     if (!client) {
       return NextResponse.json(
         {

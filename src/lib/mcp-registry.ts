@@ -23,13 +23,13 @@ export const DEFAULT_MCPS: McpRegistryEntry[] = [
  * Call this on app startup or when fetching the MCP list.
  */
 export async function seedDefaultsIfNeeded(): Promise<void> {
-  const alreadySeeded = await hasSeededDefaults();
+  const alreadySeeded = hasSeededDefaults();
   if (alreadySeeded) return;
 
   // Add each default MCP
   for (const mcp of DEFAULT_MCPS) {
     try {
-      await addMcp({
+      addMcp({
         slug: mcp.slug,
         githubRepo: mcp.githubRepo,
         releaseTag: mcp.releaseTag ?? "latest",
@@ -42,7 +42,7 @@ export async function seedDefaultsIfNeeded(): Promise<void> {
     }
   }
 
-  await markSeededDefaults();
+  markSeededDefaults();
 }
 
 /**

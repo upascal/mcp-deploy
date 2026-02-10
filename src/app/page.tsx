@@ -133,7 +133,7 @@ export default function Dashboard() {
       <AddMcpModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onAdded={(slug) => {
+        onAdded={() => {
           loadData();
         }}
       />

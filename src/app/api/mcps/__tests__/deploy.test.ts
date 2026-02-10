@@ -13,12 +13,14 @@ vi.mock("@/lib/cloudflare-config", () => ({
 vi.mock("@/lib/wrangler", () => ({
   deployWorker: vi.fn(),
   setSecrets: vi.fn(),
+  ensureKVNamespace: vi.fn(),
 }));
 
 vi.mock("@/lib/store", () => ({
   setDeployment: vi.fn(),
   setMcpSecrets: vi.fn(),
   getMcpSecrets: vi.fn(),
+  getDeployment: vi.fn(),
 }));
 
 vi.mock("@/lib/encryption", () => ({
@@ -33,7 +35,7 @@ import { POST as deployHandler } from "../../mcps/[slug]/deploy/route";
 import { getStoredMcp, resolveMcpEntry, getBundleContent } from "@/lib/mcp-registry";
 import { isCfConfigured } from "@/lib/cloudflare-config";
 import { deployWorker, setSecrets } from "@/lib/wrangler";
-import { setDeployment, setMcpSecrets, getMcpSecrets } from "@/lib/store";
+import { setDeployment, getMcpSecrets, getDeployment } from "@/lib/store";
 import type { ResolvedMcpEntry } from "@/lib/types";
 
 const mockEntry = {
@@ -73,11 +75,12 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(isCfConfigured).mockResolvedValue(true);
+    vi.mocked(isCfConfigured).mockReturnValue(true);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
     vi.mocked(getBundleContent).mockResolvedValue("// bundle code");
     vi.mocked(deployWorker).mockResolvedValue({ url: "https://test-mcp-worker.user.workers.dev" });
-    vi.mocked(getMcpSecrets).mockResolvedValue(null);
+    vi.mocked(getMcpSecrets).mockReturnValue(null);
+    vi.mocked(getDeployment).mockReturnValue(null);
   });
 
   it("should deploy successfully", async () => {
@@ -107,7 +110,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   });
 
   it("should return 400 when not logged in to Cloudflare", async () => {
-    vi.mocked(isCfConfigured).mockResolvedValue(false);
+    vi.mocked(isCfConfigured).mockReturnValue(false);
 
     const res = await deployHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
@@ -132,7 +135,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   });
 
   it("should merge with existing secrets on redeploy", async () => {
-    vi.mocked(getMcpSecrets).mockResolvedValue({ OLD_KEY: "old-value" });
+    vi.mocked(getMcpSecrets).mockReturnValue({ OLD_KEY: "old-value" });
 
     const res = await deployHandler(
       makeRequest({ secrets: { NEW_KEY: "new-value" } }),
@@ -182,5 +185,87 @@ describe("POST /api/mcps/[slug]/deploy", () => {
         error: "Deploy failed",
       })
     );
+  });
+
+  it("should return 400 for invalid slug format", async () => {
+    const res = await deployHandler(makeRequest(), {
+      params: Promise.resolve({ slug: "Invalid_Slug!" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toContain("Invalid slug");
+  });
+
+  it("should return 400 for empty slug", async () => {
+    const res = await deployHandler(makeRequest(), {
+      params: Promise.resolve({ slug: "" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toContain("Invalid slug");
+  });
+
+  it("should handle malformed JSON request body gracefully", async () => {
+    const req = new Request("http://localhost:3000/api/mcps/test-mcp/deploy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not-valid-json",
+    });
+
+    const res = await deployHandler(req, {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    // Malformed JSON is caught and treated as empty body
+    expect(res.status).toBe(200);
+  });
+
+  it("should handle missing secrets gracefully", async () => {
+    const res = await deployHandler(
+      makeRequest({ secrets: null }),
+      { params: Promise.resolve({ slug: "test-mcp" }) }
+    );
+
+    expect(res.status).toBe(200);
+    expect(setSecrets).toHaveBeenCalledWith(
+      "test-mcp-worker",
+      expect.objectContaining({ BEARER_TOKEN: expect.any(String) })
+    );
+  });
+
+  it("should handle resolution errors", async () => {
+    vi.mocked(resolveMcpEntry).mockRejectedValue(new Error("Failed to resolve MCP"));
+
+    const res = await deployHandler(makeRequest(), {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toContain("Failed to resolve MCP");
+  });
+
+  it("should handle bundle fetch errors", async () => {
+    vi.mocked(getBundleContent).mockRejectedValue(new Error("Bundle fetch failed"));
+
+    const res = await deployHandler(makeRequest(), {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+  });
+
+  it("should handle setSecrets errors", async () => {
+    vi.mocked(setSecrets).mockRejectedValue(new Error("Failed to set secrets"));
+
+    const res = await deployHandler(makeRequest(), {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
   });
 });

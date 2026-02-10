@@ -90,12 +90,44 @@ describe("GET /api/mcps/validate", () => {
     expect(body.valid).toBe(false);
     expect(body.error).toContain("no releases");
   });
+
+  it("should handle empty repo string", async () => {
+    const req = new NextRequest("http://localhost:3000/api/mcps/validate?repo=");
+    const res = await validateHandler(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.valid).toBe(false);
+  });
+
+  it("should handle special characters in repo", async () => {
+    vi.mocked(parseGitHubRepo).mockReturnValue(null);
+
+    const req = new NextRequest("http://localhost:3000/api/mcps/validate?repo=owner/repo@#$");
+    const res = await validateHandler(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.valid).toBe(false);
+  });
+
+  it("should handle network errors", async () => {
+    vi.mocked(parseGitHubRepo).mockReturnValue("owner/repo");
+    vi.mocked(fetchMcpMetadata).mockRejectedValue(new Error("Network timeout"));
+
+    const req = new NextRequest("http://localhost:3000/api/mcps/validate?repo=owner/repo");
+    const res = await validateHandler(req);
+    const body = await res.json();
+
+    expect(body.valid).toBe(false);
+    expect(body.error).toContain("Network timeout");
+  });
 });
 
 describe("POST /api/mcps/add", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getMcps).mockResolvedValue([]);
+    vi.mocked(getMcps).mockReturnValue([]);
   });
 
   it("should add a new MCP", async () => {
@@ -125,12 +157,12 @@ describe("POST /api/mcps/add", () => {
     const body = await res.json();
 
     expect(res.status).toBe(400);
-    expect(body.error).toContain("Missing githubRepo");
+    expect(body.error).toContain("Missing or invalid githubRepo");
   });
 
   it("should return 409 for duplicate repo", async () => {
     vi.mocked(parseGitHubRepo).mockReturnValue("owner/test-mcp-remote");
-    vi.mocked(getMcps).mockResolvedValue([
+    vi.mocked(getMcps).mockReturnValue([
       {
         slug: "existing",
         githubRepo: "owner/test-mcp-remote",
@@ -152,7 +184,7 @@ describe("POST /api/mcps/add", () => {
 
   it("should return 409 for duplicate prevalidated slug", async () => {
     vi.mocked(parseGitHubRepo).mockReturnValue("owner/new-repo");
-    vi.mocked(getMcps).mockResolvedValue([
+    vi.mocked(getMcps).mockReturnValue([
       {
         slug: "test-mcp-worker",
         githubRepo: "owner/other-repo",
@@ -169,7 +201,7 @@ describe("POST /api/mcps/add", () => {
       }),
     });
     const res = await addHandler(req);
-    const body = await res.json();
+    await res.json();
 
     expect(res.status).toBe(409);
   });
@@ -188,5 +220,77 @@ describe("POST /api/mcps/add", () => {
     await addHandler(req);
 
     expect(fetchMcpMetadata).toHaveBeenCalledWith("owner/test-mcp-remote", "v0.2.0");
+  });
+
+  it("should return 500 for malformed JSON", async () => {
+    const req = new NextRequest("http://localhost:3000/api/mcps/add", {
+      method: "POST",
+      body: "not-valid-json",
+    });
+    const res = await addHandler(req);
+    const body = await res.json();
+
+    // Malformed JSON causes json() to throw, caught by outer catch block
+    expect(res.status).toBe(500);
+    expect(body.error).toBeDefined();
+  });
+
+  it("should return 400 for empty githubRepo", async () => {
+    const req = new NextRequest("http://localhost:3000/api/mcps/add", {
+      method: "POST",
+      body: JSON.stringify({ githubRepo: "" }),
+    });
+    const res = await addHandler(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toContain("Missing or invalid githubRepo");
+  });
+
+  it("should return 400 for invalid repo format", async () => {
+    vi.mocked(parseGitHubRepo).mockReturnValue(null);
+
+    const req = new NextRequest("http://localhost:3000/api/mcps/add", {
+      method: "POST",
+      body: JSON.stringify({ githubRepo: "invalid-format" }),
+    });
+    const res = await addHandler(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toContain("Invalid repository format");
+  });
+
+  it("should handle fetch metadata errors", async () => {
+    vi.mocked(parseGitHubRepo).mockReturnValue("owner/test-mcp-remote");
+    vi.mocked(fetchMcpMetadata).mockRejectedValue(new Error("GitHub API error"));
+
+    const req = new NextRequest("http://localhost:3000/api/mcps/add", {
+      method: "POST",
+      body: JSON.stringify({ githubRepo: "owner/test-mcp-remote" }),
+    });
+    const res = await addHandler(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toContain("GitHub API error");
+  });
+
+  it("should handle addMcp failure", async () => {
+    vi.mocked(parseGitHubRepo).mockReturnValue("owner/test-mcp-remote");
+    vi.mocked(fetchMcpMetadata).mockResolvedValue(mockMetadata);
+    vi.mocked(addMcp).mockImplementation(() => {
+      throw new Error("Database write error");
+    });
+
+    const req = new NextRequest("http://localhost:3000/api/mcps/add", {
+      method: "POST",
+      body: JSON.stringify({ githubRepo: "owner/test-mcp-remote" }),
+    });
+    const res = await addHandler(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toContain("Database write error");
   });
 });

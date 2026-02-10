@@ -259,7 +259,7 @@ export function SecretForm({
                     <a
                       href={field.helpUrl}
                       target="_blank"
-                      rel="noopener"
+                      rel="noopener noreferrer"
                       className="text-indigo-400 hover:underline"
                     >
                       Get key &rarr;

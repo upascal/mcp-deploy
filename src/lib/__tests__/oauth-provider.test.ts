@@ -218,8 +218,8 @@ describe("exchangeCodeForToken", () => {
   beforeEach(async () => {
     testDb = createTestDb();
     // Set up the worker URL mapping and JWT secret
-    await mapWorkerUrlToSlug("https://my-worker.workers.dev", "test-mcp");
-    await setDeploymentJWTSecret("test-mcp", "jwt-signing-secret");
+    mapWorkerUrlToSlug("https://my-worker.workers.dev", "test-mcp");
+    setDeploymentJWTSecret("test-mcp", "jwt-signing-secret");
   });
 
   async function createValidCode(): Promise<string> {

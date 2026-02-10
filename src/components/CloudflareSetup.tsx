@@ -90,7 +90,7 @@ export function CloudflareSetup() {
           <a
             href="https://dash.cloudflare.com/profile/api-tokens"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             className="text-indigo-400 hover:underline"
           >
             Create token &rarr;

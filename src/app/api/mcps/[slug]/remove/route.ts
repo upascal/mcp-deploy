@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDeployment, removeMcp } from "@/lib/store";
 import { deleteWorker } from "@/lib/wrangler";
+import { getStoredMcp, resolveMcpEntry } from "@/lib/mcp-registry";
+import { isValidSlug } from "@/lib/validation";
 
 /**
  * Remove an MCP from the registry.
@@ -14,20 +16,26 @@ export async function DELETE(
 ) {
   try {
     const { slug } = await params;
+    if (!isValidSlug(slug)) {
+      return NextResponse.json({ error: "Invalid slug format" }, { status: 400 });
+    }
 
     // Best-effort: delete the Cloudflare worker if deployed
-    const deployment = await getDeployment(slug);
+    const deployment = getDeployment(slug);
     if (deployment?.workerUrl) {
-      const workerName = slug;
-      try {
-        await deleteWorker(workerName);
-      } catch (err) {
-        // Worker may already be gone — log and continue
-        console.warn(`[remove] Failed to delete worker "${workerName}":`, err);
+      const entry = await getStoredMcp(slug);
+      if (entry) {
+        try {
+          const resolved = await resolveMcpEntry(entry);
+          await deleteWorker(resolved.workerName);
+        } catch (err) {
+          // Worker may already be gone — log and continue
+          console.warn(`[remove] Failed to delete worker for "${slug}":`, err);
+        }
       }
     }
 
-    await removeMcp(slug);
+    removeMcp(slug);
 
     return NextResponse.json({ success: true });
   } catch (error) {

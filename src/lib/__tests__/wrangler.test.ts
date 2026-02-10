@@ -146,7 +146,7 @@ describe("deployWorker", () => {
 
     await expect(
       deployWorker(mockEntry, "// bundle", "// wrapper")
-    ).rejects.toThrow("Deploy failed");
+    ).rejects.toThrow("wrangler deploy failed");
 
     expect(fs.rmSync).toHaveBeenCalledWith("/tmp/mcp-deploy-test123", {
       recursive: true,

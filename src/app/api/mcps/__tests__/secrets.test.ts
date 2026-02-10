@@ -24,6 +24,7 @@ import { getStoredMcp, resolveMcpEntry } from "@/lib/mcp-registry";
 import { isCfConfigured } from "@/lib/cloudflare-config";
 import { setSecrets, deleteSecret } from "@/lib/wrangler";
 import { getMcpSecrets, setMcpSecrets } from "@/lib/store";
+import type { ResolvedMcpEntry } from "@/lib/types";
 
 const mockEntry = {
   slug: "test-mcp",
@@ -32,24 +33,36 @@ const mockEntry = {
   addedAt: "2024-01-01",
 };
 
-const mockResolved = {
+const mockResolved: ResolvedMcpEntry = {
   slug: "test-mcp",
+  githubRepo: "owner/test-mcp-remote",
+  name: "Test MCP",
+  description: "A test MCP",
+  version: "v0.1.0",
   workerName: "test-mcp-worker",
+  durableObjectBinding: "MCP_OBJ",
+  durableObjectClassName: "TestMCP",
+  compatibilityDate: "2024-12-01",
+  compatibilityFlags: [],
+  migrationTag: "v1",
+  bundleUrl: "https://example.com/worker.mjs",
   secrets: [
     { key: "API_KEY", label: "API Key", required: true },
     { key: "OPTIONAL", label: "Optional", required: false },
   ],
+  config: [],
+  autoSecrets: [],
 };
 
 describe("GET /api/mcps/[slug]/secrets", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved as any);
+    vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
   });
 
   it("should return secret schema and configured keys", async () => {
-    vi.mocked(getMcpSecrets).mockResolvedValue({ API_KEY: "encrypted-value" });
+    vi.mocked(getMcpSecrets).mockReturnValue({ API_KEY: "encrypted-value" });
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets");
     const res = await getSecretsHandler(req, {
@@ -64,7 +77,7 @@ describe("GET /api/mcps/[slug]/secrets", () => {
   });
 
   it("should return empty configuredKeys when no secrets set", async () => {
-    vi.mocked(getMcpSecrets).mockResolvedValue(null);
+    vi.mocked(getMcpSecrets).mockReturnValue(null);
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets");
     const res = await getSecretsHandler(req, {
@@ -91,9 +104,9 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved as any);
-    vi.mocked(isCfConfigured).mockResolvedValue(true);
-    vi.mocked(getMcpSecrets).mockResolvedValue({ EXISTING: "old-value" });
+    vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
+    vi.mocked(isCfConfigured).mockReturnValue(true);
+    vi.mocked(getMcpSecrets).mockReturnValue({ EXISTING: "old-value" });
   });
 
   it("should update secrets on the worker", async () => {
@@ -159,7 +172,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
   });
 
   it("should return 400 when not logged in", async () => {
-    vi.mocked(isCfConfigured).mockResolvedValue(false);
+    vi.mocked(isCfConfigured).mockReturnValue(false);
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
       method: "PUT",
@@ -171,5 +184,90 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it("should return 500 for malformed JSON body", async () => {
+    const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: "not-valid-json",
+    });
+    const res = await putSecretsHandler(req, {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    // Malformed JSON causes json() to throw, caught by outer catch block
+    expect(res.status).toBe(500);
+  });
+
+  it("should return 404 for non-existent MCP", async () => {
+    vi.mocked(getStoredMcp).mockResolvedValue(undefined);
+
+    const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secrets: { API_KEY: "key" } }),
+    });
+    const res = await putSecretsHandler(req, {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("should handle empty secrets object", async () => {
+    const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secrets: {} }),
+    });
+    const res = await putSecretsHandler(req, {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("should handle empty deleteKeys array", async () => {
+    const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deleteKeys: [] }),
+    });
+    const res = await putSecretsHandler(req, {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("should handle wrangler setSecrets failure", async () => {
+    vi.mocked(setSecrets).mockRejectedValue(new Error("Wrangler error"));
+
+    const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secrets: { API_KEY: "key" } }),
+    });
+    const res = await putSecretsHandler(req, {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    expect(res.status).toBe(500);
+  });
+
+  it("should handle wrangler deleteSecret failure", async () => {
+    vi.mocked(deleteSecret).mockRejectedValue(new Error("Delete failed"));
+
+    const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deleteKeys: ["EXISTING"] }),
+    });
+    const res = await putSecretsHandler(req, {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    expect(res.status).toBe(500);
   });
 });

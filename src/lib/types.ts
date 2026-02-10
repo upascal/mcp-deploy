@@ -102,6 +102,8 @@ export interface DeploymentRecord {
   status: "deployed" | "failed" | "not_deployed";
   workerUrl: string | null;
   bearerToken: string | null; // encrypted
+  oauthPassword?: string | null; // encrypted
+  authMode?: "bearer" | "oauth" | "open";
   deployedAt: string | null;
   version: string;
   error?: string;

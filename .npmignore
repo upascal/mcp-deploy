@@ -1,0 +1,48 @@
+# build output
+.next
+out
+
+# dependencies
+node_modules
+
+# local data / artifacts
+data
+*.db
+*.db-shm
+*.db-wal
+
+# logs
+npm-debug.log*
+
+# dev/test only
+coverage
+vitest.config.ts
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+**/__tests__
+
+# tooling
+.github
+scripts
+workers
+
+# editor / OS
+.DS_Store
+
+# environment and config
+.env.local
+.env
+.claude
+
+# images/media
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.mp4
+*.mov
+
+# project planning
+TODO.md
+docs/MODULAR_MCP_PLAN.md

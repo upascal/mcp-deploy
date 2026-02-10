@@ -55,6 +55,8 @@ function createTestDb(): Database.Database {
       status TEXT NOT NULL,
       worker_url TEXT,
       bearer_token TEXT,
+      oauth_password TEXT,
+      auth_mode TEXT NOT NULL DEFAULT 'bearer',
       deployed_at TEXT,
       version TEXT NOT NULL DEFAULT '',
       error TEXT

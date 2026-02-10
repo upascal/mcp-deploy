@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAllMcps, resolveMcpEntry, checkForUpdate } from "@/lib/mcp-registry";
+import { getAllMcps, resolveMcpEntry } from "@/lib/mcp-registry";
 import { getDeployment } from "@/lib/store";
 
 export async function GET() {
@@ -11,17 +11,14 @@ export async function GET() {
         try {
           // Resolve the entry to get full metadata from GitHub
           const resolved = await resolveMcpEntry(entry);
-          const deployment = await getDeployment(entry.slug);
+          const deployment = getDeployment(entry.slug);
 
-          // Check for updates if deployed
-          let updateAvailable = false;
-          let latestVersion: string | null = resolved.version;
-
-          if (deployment?.status === "deployed" && deployment.version) {
-            const updateCheck = await checkForUpdate(entry, deployment.version);
-            updateAvailable = updateCheck.updateAvailable;
-            latestVersion = updateCheck.latestVersion;
-          }
+          // Check for updates: resolved.version is the latest from GitHub (cached 5 min)
+          const latestVersion = resolved.version;
+          const updateAvailable =
+            !!deployment?.version &&
+            deployment.status === "deployed" &&
+            deployment.version !== latestVersion;
 
           return {
             slug: resolved.slug,
@@ -40,7 +37,7 @@ export async function GET() {
         } catch (err) {
           // If we can't resolve, return minimal info with error
           console.error(`Failed to resolve MCP ${entry.slug}:`, err);
-          const deployment = await getDeployment(entry.slug);
+          const deployment = getDeployment(entry.slug);
           return {
             slug: entry.slug,
             name: entry.slug,

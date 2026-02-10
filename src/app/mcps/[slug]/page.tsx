@@ -23,6 +23,10 @@ interface McpDetailData {
   autoSecrets: string[];
   deployment: DeploymentRecord;
   configuredSecrets: string[];
+  credentials?: {
+    bearerToken: string | null;
+    oauthPassword: string | null;
+  };
 }
 
 interface DeployResult {
@@ -30,7 +34,9 @@ interface DeployResult {
   workerUrl: string;
   mcpUrl: string;
   mcpUrlWithToken: string;
-  bearerToken: string;
+  bearerToken: string | null;
+  authMode: "bearer" | "oauth" | "open";
+  oauthPassword?: string;
   oauthEnabled?: boolean;
   error?: string;
 }
@@ -87,12 +93,12 @@ export default function McpDetailPage({
   const [deploying, setDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const [secretVisible, setSecretVisible] = useState<Record<string, boolean>>(
     {}
   );
-  const [testingKey, setTestingKey] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
     Record<string, { success: boolean; message: string }>
   >({});
@@ -103,6 +109,9 @@ export default function McpDetailPage({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+  const [authMode, setAuthMode] = useState<"bearer" | "oauth" | "open">(
+    "bearer"
+  );
 
   // Track which keys have been auto-tested to avoid duplicate tests
   const autoTestedRef = useRef<Set<string>>(new Set());
@@ -158,7 +167,6 @@ export default function McpDetailPage({
       return;
     }
 
-    setTestingKey(field.key);
     setTestResults({
       ...testResults,
       [field.key]: undefined as unknown as { success: boolean; message: string },
@@ -198,8 +206,6 @@ export default function McpDetailPage({
         ...testResults,
         [field.key]: { success: false, message: "Failed to test connection" },
       });
-    } finally {
-      setTestingKey(null);
     }
   }
 
@@ -208,6 +214,9 @@ export default function McpDetailPage({
       .then((r) => r.json())
       .then((d) => {
         setData(d);
+        if (d.deployment?.authMode) {
+          setAuthMode(d.deployment.authMode);
+        }
         // Initialize config defaults
         const defaults: Record<string, string> = {};
         for (const field of d.config ?? []) {
@@ -243,6 +252,7 @@ export default function McpDetailPage({
         body: JSON.stringify({
           secrets: secretValues,
           config: configValues,
+          authMode,
         }),
       });
       const result = await res.json();
@@ -357,7 +367,7 @@ export default function McpDetailPage({
               <a
                 href={`https://github.com/${data.githubRepo}`}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 className="text-indigo-400 hover:underline"
               >
                 Source &rarr;
@@ -481,7 +491,7 @@ export default function McpDetailPage({
                           <a
                             href={field.helpUrl}
                             target="_blank"
-                            rel="noopener"
+                            rel="noopener noreferrer"
                             className="text-indigo-400 hover:underline"
                           >
                             Get key &rarr;
@@ -580,6 +590,33 @@ export default function McpDetailPage({
           </button>
         </div>
 
+        <div className="mt-5">
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Authentication
+          </label>
+          <select
+            value={authMode}
+            onChange={(e) =>
+              setAuthMode(e.target.value as "bearer" | "oauth" | "open")
+            }
+            className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="bearer">Bearer token (default)</option>
+            <option value="oauth">OAuth 2.1 (password protected)</option>
+            <option value="open">Open (no authentication)</option>
+          </select>
+          {authMode === "oauth" && (
+            <p className="text-xs text-gray-500 mt-2">
+              OAuth requires a password prompt during authorization. Bearer tokens are not accepted.
+            </p>
+          )}
+          {authMode === "open" && (
+            <p className="text-xs text-red-400 mt-2">
+              Warning: Anyone with the URL can access this MCP.
+            </p>
+          )}
+        </div>
+
         {deployError && (
           <p className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2">
             {deployError}
@@ -587,27 +624,64 @@ export default function McpDetailPage({
         )}
       </div>
 
-      {/* Deploy Result */}
+      {/* Deploy Result (fresh) */}
       {deployResult && (
-        <div className="space-y-4">
-          <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4">
-            <p className="text-sm text-emerald-400">
-              Successfully deployed to {deployResult.workerUrl}
-            </p>
-          </div>
-
-          <div>
-            <h2 className="text-lg font-semibold mb-3">Connect to Claude</h2>
-            <ClaudeConfigSnippet
-              mcpUrl={deployResult.mcpUrl}
-              mcpUrlWithToken={deployResult.mcpUrlWithToken}
-              bearerToken={deployResult.bearerToken}
-              slug={slug}
-              oauthEnabled={deployResult.oauthEnabled}
-            />
-          </div>
+        <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4">
+          <p className="text-sm text-emerald-400">
+            Successfully deployed to {deployResult.workerUrl}
+          </p>
         </div>
       )}
+
+      {/* Credentials & Connection Info (persistent) */}
+      {(() => {
+        const oauthPw = deployResult?.oauthPassword ?? data.credentials?.oauthPassword;
+        const bearer = deployResult?.bearerToken ?? data.credentials?.bearerToken;
+        const mode = deployResult?.authMode ?? data.deployment?.authMode ?? "bearer";
+        const workerUrl = deployResult?.workerUrl ?? data.deployment?.workerUrl;
+        const mcpUrl = deployResult?.mcpUrl ?? (workerUrl ? `${workerUrl}/mcp` : null);
+        const mcpUrlWithToken = deployResult?.mcpUrlWithToken ?? (bearer && workerUrl ? `${workerUrl}/mcp/t/${bearer}` : mcpUrl);
+
+        if (!isDeployed && !deployResult) return null;
+
+        return (
+          <div className="space-y-4">
+            {mode === "oauth" && oauthPw && (
+              <div className="border border-amber-500/30 bg-amber-500/5 rounded-xl p-4">
+                <p className="text-sm text-amber-300 mb-2">OAuth password</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 bg-gray-800 rounded-lg text-sm text-amber-200 break-all">
+                    {oauthPw}
+                  </code>
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(oauthPw);
+                      setPasswordCopied(true);
+                      setTimeout(() => setPasswordCopied(false), 2000);
+                    }}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-300 transition-colors shrink-0"
+                  >
+                    {passwordCopied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {mcpUrl && (
+              <div>
+                <h2 className="text-lg font-semibold mb-3">Connect to Claude</h2>
+                <ClaudeConfigSnippet
+                  mcpUrl={mcpUrl}
+                  mcpUrlWithToken={mcpUrlWithToken ?? mcpUrl}
+                  bearerToken={bearer}
+                  slug={slug}
+                  authMode={mode}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Secret Management (post-deploy) */}
       {isDeployed && (data.secrets ?? []).length > 0 && (

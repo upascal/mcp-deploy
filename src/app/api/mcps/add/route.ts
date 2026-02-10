@@ -4,6 +4,7 @@ import {
   parseGitHubRepo,
 } from "@/lib/github-releases";
 import { addMcp, getMcps } from "@/lib/store";
+import { isValidReleaseTag, isValidSlug } from "@/lib/validation";
 
 /**
  * Add a new MCP from a GitHub repository.
@@ -27,9 +28,23 @@ export async function POST(request: NextRequest) {
       releaseTag?: string;
     };
 
-    if (!repoInput) {
+    if (!repoInput || typeof repoInput !== "string") {
       return NextResponse.json(
-        { error: "Missing githubRepo" },
+        { error: "Missing or invalid githubRepo" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidReleaseTag(releaseTag)) {
+      return NextResponse.json(
+        { error: "Invalid releaseTag format" },
+        { status: 400 }
+      );
+    }
+
+    if (prevalidatedSlug && !isValidSlug(prevalidatedSlug)) {
+      return NextResponse.json(
+        { error: "Invalid slug format" },
         { status: 400 }
       );
     }
@@ -44,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already added (fast check before any network calls)
-    const existing = await getMcps();
+    const existing = getMcps();
     if (existing.some((m) => m.githubRepo === repo)) {
       return NextResponse.json(
         { error: `Repository ${repo} is already added` },
@@ -72,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Add to MCPs
-    await addMcp({
+    addMcp({
       slug,
       githubRepo: repo,
       releaseTag,
