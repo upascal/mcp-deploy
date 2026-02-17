@@ -122,7 +122,7 @@ export async function fetchMcpMetadata(
     metadata,
     bundleUrl: bundleAsset.browser_download_url,
     metadataUrl: metadataAsset.browser_download_url,
-    version: release.tag_name,
+    version: release.tag_name.replace(/^v/, ""),
   };
 }
 
@@ -157,7 +157,7 @@ export async function validateGitHubRepo(
         hasReleases: true,
         hasMcpDeployJson: hasMetadata,
         hasWorkerBundle: hasBundle,
-        latestVersion: release.tag_name,
+        latestVersion: release.tag_name.replace(/^v/, ""),
         error: !hasMetadata
           ? "Release missing mcp-deploy.json"
           : "Release missing worker.mjs",
@@ -169,7 +169,7 @@ export async function validateGitHubRepo(
       hasReleases: true,
       hasMcpDeployJson: true,
       hasWorkerBundle: true,
-      latestVersion: release.tag_name,
+      latestVersion: release.tag_name.replace(/^v/, ""),
     };
   } catch (err) {
     return {
@@ -189,7 +189,7 @@ export async function validateGitHubRepo(
 export async function getLatestVersion(repo: string): Promise<string | null> {
   try {
     const release = await getLatestRelease(repo);
-    return release.tag_name;
+    return release.tag_name.replace(/^v/, "");
   } catch {
     return null;
   }

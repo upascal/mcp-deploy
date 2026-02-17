@@ -7,12 +7,12 @@ This guide explains how to set up your MCPs (Model Context Protocols) for use wi
 ### mcp-deploy.json Files
 Both MCP projects now have `mcp-deploy.json` files at their root:
 
-1. **zotero-assistant-mcp-remote/mcp-deploy.json**
+1. **zotero-assistant-mcp/mcp-deploy.json**
    - Defines: name, description, secrets, configuration
    - Secrets: ZOTERO_API_KEY, ZOTERO_LIBRARY_ID, BEARER_TOKEN
    - Config: (none)
 
-2. **paper-search-mcp-remote/mcp-deploy.json**
+2. **paper-search-mcp/mcp-deploy.json**
    - Defines: name, description, secrets, configuration
    - Secrets: BEARER_TOKEN, SEMANTIC_SCHOLAR_API_KEY, PUBMED_API_KEY, CONTACT_EMAIL
    - Config: ENABLED_PLATFORMS (to choose which paper search platforms to enable)
@@ -27,8 +27,8 @@ npm run release        # Builds and copies worker.mjs + mcp-deploy.json to root
 
 ### DEFAULT_MCPS
 The mcp-deploy app seeds these MCPs by default:
-- `upascal/zotero-assistant-mcp-remote`
-- `upascal/paper-search-mcp-remote`
+- `upascal/zotero-assistant-mcp`
+- `upascal/paper-search-mcp`
 
 ## How to Create GitHub Releases
 
@@ -36,7 +36,7 @@ Both projects now have GitHub Actions workflows that automatically build and upl
 
 ### Step 1: Push Code to GitHub (if not already)
 ```bash
-cd zotero-assistant-mcp-remote
+cd zotero-assistant-mcp
 git push origin main
 ```
 
@@ -59,14 +59,14 @@ When the tag is pushed:
 ### Step 4: Verify It Worked
 Check the release:
 ```bash
-curl https://api.github.com/repos/upascal/zotero-assistant-mcp-remote/releases/latest
+curl https://api.github.com/repos/upascal/zotero-assistant-mcp/releases/latest
 ```
 
 Look for assets with names:
 - `mcp-deploy.json`
 - `worker.mjs`
 
-Or visit: https://github.com/upascal/zotero-assistant-mcp-remote/releases
+Or visit: https://github.com/upascal/zotero-assistant-mcp/releases
 
 ## File Structure
 
@@ -140,11 +140,11 @@ Paper Search must have a GitHub release with `worker.mjs` and `mcp-deploy.json` 
 
 ## Next Steps
 
-### For zotero-assistant-mcp-remote:
+### For zotero-assistant-mcp:
 
 1. Push to GitHub (if not already):
    ```bash
-   cd zotero-assistant-mcp-remote
+   cd zotero-assistant-mcp
    git push origin main
    ```
 
@@ -162,11 +162,11 @@ Paper Search must have a GitHub release with `worker.mjs` and `mcp-deploy.json` 
    - Visit zotero-assistant detail page
    - Should show all secrets and config from `mcp-deploy.json`
 
-### For paper-search-mcp-remote:
+### For paper-search-mcp:
 
 1. **Push to GitHub first** (if not already):
    ```bash
-   cd paper-search-mcp-remote
+   cd paper-search-mcp
    git push origin main
    ```
 

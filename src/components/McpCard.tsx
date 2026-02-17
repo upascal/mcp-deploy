@@ -29,9 +29,9 @@ export function McpCard({
 }: McpCardProps) {
   return (
     <Link href={`/mcps/${slug}`}>
-      <div className="group border border-gray-800 rounded-xl p-6 bg-gray-900/50 hover:bg-gray-900 hover:border-gray-700 transition-all cursor-pointer">
+      <div className="group border border-gray-800 rounded-xl p-6 bg-gray-900/50 hover:bg-gray-900 hover:border-gray-700 transition-all cursor-pointer overflow-hidden">
         <div className="flex items-start justify-between mb-3">
-          <h3 className="font-semibold text-gray-100 group-hover:text-indigo-400 transition-colors">
+          <h3 className="font-semibold text-gray-100 group-hover:text-indigo-400 transition-colors line-clamp-1">
             {name}
           </h3>
           <div className="flex items-center gap-2">
@@ -43,7 +43,7 @@ export function McpCard({
             <StatusBadge status={status} />
           </div>
         </div>
-        <p className="text-sm text-gray-400 mb-4 line-clamp-2">
+        <p className="text-sm text-gray-400 mb-4 line-clamp-2 min-h-[2.5rem]">
           {description}
         </p>
         <div className="flex items-center justify-between text-xs text-gray-500">
