@@ -1,13 +1,181 @@
 @import "tailwindcss";
 
-/* Fix browser autofill background color to match dark theme */
+/* ── Design tokens (dark mode) ───────────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --surface-page: #030712;    /* gray-950 */
+  --surface: #111827;         /* gray-900 */
+  --surface-raised: #1f2937;  /* gray-800 */
+  --surface-overlay: #374151; /* gray-700 */
+
+  /* Foreground */
+  --fg: #f3f4f6;              /* gray-100 */
+  --fg-secondary: #d1d5db;    /* gray-300 */
+  --fg-muted: #9ca3af;        /* gray-400 */
+  --fg-faint: #6b7280;        /* gray-500 */
+  --fg-disabled: #4b5563;     /* gray-600 */
+
+  /* Borders / edges */
+  --edge: #1f2937;            /* gray-800 */
+  --edge-subtle: #374151;     /* gray-700 */
+
+  /* Accent (indigo) */
+  --accent: #4f46e5;          /* indigo-600 */
+  --accent-hover: #4338ca;    /* indigo-700 */
+  --accent-fg: #818cf8;       /* indigo-400 */
+  --accent-edge: #6366f1;     /* indigo-500 */
+
+  /* Success (emerald) */
+  --success: #34d399;         /* emerald-400 */
+  --success-mid: #10b981;     /* emerald-500 */
+
+  /* Danger (red) */
+  --danger: #f87171;          /* red-400 */
+  --danger-mid: #ef4444;      /* red-500 */
+  --danger-strong: #dc2626;   /* red-600 */
+  --danger-dark: #7f1d1d;     /* red-900 */
+
+  /* Warning (amber) */
+  --warning: #d97706;         /* amber-600 */
+  --warning-hover: #b45309;   /* amber-700 */
+
+  /* Info (teal) */
+  --info: #2dd4bf;            /* teal-400 */
+  --info-mid: #14b8a6;        /* teal-500 */
+}
+
+/* ── Design tokens (light mode) ──────────────────────────────── */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --surface-page: #fff;
+  --surface: #f9fafb;         /* gray-50 */
+  --surface-raised: #f3f4f6;  /* gray-100 */
+  --surface-overlay: #e5e7eb; /* gray-200 */
+
+  /* Foreground */
+  --fg: #111827;              /* gray-900 */
+  --fg-secondary: #374151;    /* gray-700 */
+  --fg-muted: #4b5563;        /* gray-600 */
+  --fg-faint: #6b7280;        /* gray-500 */
+  --fg-disabled: #9ca3af;     /* gray-400 */
+
+  /* Borders / edges */
+  --edge: #e5e7eb;            /* gray-200 */
+  --edge-subtle: #d1d5db;     /* gray-300 */
+
+  /* Accent (indigo — darker for light bg contrast) */
+  --accent: #4f46e5;          /* indigo-600 */
+  --accent-hover: #4338ca;    /* indigo-700 */
+  --accent-fg: #4f46e5;       /* indigo-600 */
+  --accent-edge: #6366f1;     /* indigo-500 */
+
+  /* Success (emerald) */
+  --success: #059669;         /* emerald-600 */
+  --success-mid: #047857;     /* emerald-700 */
+
+  /* Danger (red) */
+  --danger: #dc2626;          /* red-600 */
+  --danger-mid: #b91c1c;      /* red-700 */
+  --danger-strong: #991b1b;   /* red-800 */
+  --danger-dark: #fef2f2;     /* red-50 (light danger zone bg) */
+
+  /* Warning (amber) */
+  --warning: #d97706;         /* amber-600 */
+  --warning-hover: #b45309;   /* amber-700 */
+
+  /* Info (teal) */
+  --info: #0d9488;            /* teal-600 */
+  --info-mid: #0f766e;        /* teal-700 */
+}
+
+/* ── System preference (follows OS) ─────────────────────────── */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    color-scheme: light;
+
+    --surface-page: #fff;
+    --surface: #f9fafb;
+    --surface-raised: #f3f4f6;
+    --surface-overlay: #e5e7eb;
+
+    --fg: #111827;
+    --fg-secondary: #374151;
+    --fg-muted: #4b5563;
+    --fg-faint: #6b7280;
+    --fg-disabled: #9ca3af;
+
+    --edge: #e5e7eb;
+    --edge-subtle: #d1d5db;
+
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --accent-fg: #4f46e5;
+    --accent-edge: #6366f1;
+
+    --success: #059669;
+    --success-mid: #047857;
+
+    --danger: #dc2626;
+    --danger-mid: #b91c1c;
+    --danger-strong: #991b1b;
+    --danger-dark: #fef2f2;
+
+    --warning: #d97706;
+    --warning-hover: #b45309;
+
+    --info: #0d9488;
+    --info-mid: #0f766e;
+  }
+}
+
+/* ── Register tokens with Tailwind v4 ────────────────────────── */
+@theme inline {
+  --color-surface-page: var(--surface-page);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+
+  --color-fg: var(--fg);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-fg-disabled: var(--fg-disabled);
+
+  --color-edge: var(--edge);
+  --color-edge-subtle: var(--edge-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-edge: var(--accent-edge);
+
+  --color-success: var(--success);
+  --color-success-mid: var(--success-mid);
+
+  --color-danger: var(--danger);
+  --color-danger-mid: var(--danger-mid);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-dark: var(--danger-dark);
+
+  --color-warning: var(--warning);
+  --color-warning-hover: var(--warning-hover);
+
+  --color-info: var(--info);
+  --color-info-mid: var(--info-mid);
+}
+
+/* ── Browser autofill hacks ──────────────────────────────────── */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 30px #1f2937 inset !important; /* bg-gray-800 */
-  -webkit-text-fill-color: #f3f4f6 !important; /* text-gray-100 */
-  caret-color: #f3f4f6 !important;
+  -webkit-box-shadow: 0 0 0 30px var(--surface-raised) inset !important;
+  -webkit-text-fill-color: var(--fg) !important;
+  caret-color: var(--fg) !important;
   transition: background-color 5000s ease-in-out 0s !important;
 }
 
@@ -38,19 +206,13 @@ button:focus {
 input[type="password"],
 input[type="text"],
 input[type="email"] {
-  background-color: #1f2937 !important; /* bg-gray-800 */
-  color: #f3f4f6 !important; /* text-gray-100 */
-  color-scheme: dark;
+  background-color: var(--surface-raised) !important;
+  color: var(--fg) !important;
 }
 
 /* Prevent white background flash on the parent container during input type changes */
 input[type="password"]:not(:focus),
 input[type="text"]:not(:focus),
 input[type="email"]:not(:focus) {
-  background-color: #1f2937 !important;
-}
-
-/* Dark color scheme for the root to prevent any light-mode leaks */
-:root {
-  color-scheme: dark;
+  background-color: var(--surface-raised) !important;
 }

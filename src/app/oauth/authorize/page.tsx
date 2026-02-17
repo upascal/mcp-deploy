@@ -24,14 +24,14 @@ function AuthorizeContent() {
   const missingParams = !clientId || !redirectUri || !codeChallenge;
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-surface-page flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="border border-gray-800 rounded-2xl bg-gray-900/80 p-8">
+        <div className="border border-edge rounded-2xl bg-surface/80 p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-4">
+            <div className="w-12 h-12 rounded-full bg-accent-edge/20 flex items-center justify-center mx-auto mb-4">
               <svg
-                className="w-6 h-6 text-indigo-400"
+                className="w-6 h-6 text-accent-fg"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -47,17 +47,17 @@ function AuthorizeContent() {
             <h1 className="text-xl font-bold text-white">
               Authorize MCP Access
             </h1>
-            <p className="text-gray-400 text-sm mt-2">
+            <p className="text-fg-muted text-sm mt-2">
               An application is requesting access to:
             </p>
-            <p className="text-indigo-400 font-mono text-sm mt-1">
+            <p className="text-accent-fg font-mono text-sm mt-1">
               {resourceName}
             </p>
           </div>
 
           {missingParams ? (
             <div className="text-center">
-              <p className="text-red-400 text-sm">
+              <p className="text-danger text-sm">
                 Invalid authorization request. Missing required parameters.
               </p>
             </div>
@@ -82,13 +82,13 @@ function AuthorizeContent() {
               <input type="hidden" name="resource" value={resource} />
 
               {/* Scope display */}
-              <div className="mb-6 p-3 bg-gray-800 rounded-lg">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">
+              <div className="mb-6 p-3 bg-surface-raised rounded-lg">
+                <p className="text-xs text-fg-faint uppercase tracking-wide mb-2">
                   Requested permissions
                 </p>
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-sm text-gray-300">
+                  <span className="w-2 h-2 rounded-full bg-success" />
+                  <span className="text-sm text-fg-secondary">
                     Access MCP tools and resources
                   </span>
                 </div>
@@ -98,7 +98,7 @@ function AuthorizeContent() {
               <div className="mb-6">
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-gray-300 mb-1.5"
+                  className="block text-sm font-medium text-fg-secondary mb-1.5"
                 >
                   Authorization password
                 </label>
@@ -108,16 +108,16 @@ function AuthorizeContent() {
                   name="password"
                   autoComplete="current-password"
                   placeholder="Enter your deploy password"
-                  className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  className="w-full px-4 py-2.5 bg-surface-raised border border-edge-subtle rounded-lg text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent-edge focus:ring-1 focus:ring-accent-edge"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-fg-faint mt-1">
                   The password configured in your mcp-deploy instance.
                 </p>
               </div>
 
               {error === "invalid_password" && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <p className="text-sm text-red-400">
+                <div className="mb-4 p-3 bg-danger-mid/10 border border-danger-mid/20 rounded-lg">
+                  <p className="text-sm text-danger">
                     Incorrect password. Please try again.
                   </p>
                 </div>
@@ -127,13 +127,13 @@ function AuthorizeContent() {
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Authorize
                 </button>
                 <a
                   href={`${redirectUri}?error=access_denied&error_description=User%20denied%20access${state ? `&state=${encodeURIComponent(state)}` : ""}`}
-                  className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-lg transition-colors text-center"
+                  className="flex-1 px-4 py-2.5 bg-surface-raised hover:bg-surface-overlay text-fg-secondary text-sm font-medium rounded-lg transition-colors text-center"
                 >
                   Deny
                 </a>
@@ -142,7 +142,7 @@ function AuthorizeContent() {
           )}
 
           {/* Footer */}
-          <p className="text-xs text-gray-600 text-center mt-6">
+          <p className="text-xs text-fg-disabled text-center mt-6">
             Powered by mcp-deploy
           </p>
         </div>
@@ -155,8 +155,8 @@ export default function AuthorizePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-          <p className="text-gray-500">Loading...</p>
+        <div className="min-h-screen bg-surface-page flex items-center justify-center">
+          <p className="text-fg-faint">Loading...</p>
         </div>
       }
     >

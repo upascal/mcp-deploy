@@ -2,9 +2,9 @@
 
 export function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    deployed: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-    failed: "bg-red-500/15 text-red-400 border-red-500/30",
-    not_deployed: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+    deployed: "bg-success-mid/15 text-success border-success-mid/30",
+    failed: "bg-danger-mid/15 text-danger border-danger-mid/30",
+    not_deployed: "bg-fg-faint/15 text-fg-muted border-fg-faint/30",
   };
 
   const labels: Record<string, string> = {
@@ -20,10 +20,10 @@ export function StatusBadge({ status }: { status: string }) {
       <span
         className={`w-1.5 h-1.5 rounded-full ${
           status === "deployed"
-            ? "bg-emerald-400"
+            ? "bg-success"
             : status === "failed"
-              ? "bg-red-400"
-              : "bg-gray-400"
+              ? "bg-danger"
+              : "bg-fg-muted"
         }`}
       />
       {labels[status] ?? "Unknown"}

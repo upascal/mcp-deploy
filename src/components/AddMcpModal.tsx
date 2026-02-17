@@ -103,14 +103,14 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div
-        className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-md shadow-2xl"
+        className="bg-surface border border-edge rounded-xl p-6 w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-100">Add MCP Server</h2>
+          <h2 className="text-xl font-bold text-fg">Add MCP Server</h2>
           <button
             onClick={handleClose}
-            className="text-gray-500 hover:text-gray-300 transition-colors"
+            className="text-fg-faint hover:text-fg-secondary transition-colors"
           >
             <svg
               className="w-5 h-5"
@@ -130,7 +130,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1.5">
+            <label className="block text-sm text-fg-muted mb-1.5">
               GitHub Repository
             </label>
             <input
@@ -148,25 +148,25 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
                 }
               }}
               placeholder="owner/repo or https://github.com/owner/repo"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              className="w-full bg-surface-raised border border-edge-subtle rounded-lg px-4 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent-edge focus:ring-1 focus:ring-accent-edge"
               autoFocus
             />
-            <p className="text-xs text-gray-500 mt-1.5">
+            <p className="text-xs text-fg-faint mt-1.5">
               Repository must have releases with <code>worker.mjs</code> and{" "}
               <code>mcp-deploy.json</code>
             </p>
           </div>
 
           {error && (
-            <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <div className="text-danger text-sm bg-danger-mid/10 border border-danger-mid/20 rounded-lg p-3">
               {error}
             </div>
           )}
 
           {validation?.valid && (
-            <div className="text-emerald-400 text-sm bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+            <div className="text-success text-sm bg-success-mid/10 border border-success-mid/20 rounded-lg p-3">
               <div className="font-medium">{validation.name}</div>
-              <div className="text-emerald-400/70 text-xs mt-0.5">
+              <div className="text-success/70 text-xs mt-0.5">
                 Version {validation.version}
               </div>
             </div>
@@ -175,7 +175,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleClose}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium transition-colors"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-surface-raised hover:bg-surface-overlay text-fg-secondary text-sm font-medium transition-colors"
             >
               Cancel
             </button>
@@ -184,7 +184,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
               <button
                 onClick={validateRepo}
                 disabled={!repo.trim() || validating}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover disabled:bg-surface-raised disabled:text-fg-disabled text-white text-sm font-medium transition-colors"
               >
                 {validating ? "Checking..." : "Check Repository"}
               </button>
@@ -192,7 +192,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
               <button
                 onClick={addMcp}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover disabled:bg-surface-raised disabled:text-fg-disabled text-white text-sm font-medium transition-colors"
               >
                 {loading ? "Adding..." : "Add MCP"}
               </button>
