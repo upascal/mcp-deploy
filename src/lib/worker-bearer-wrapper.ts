@@ -58,13 +58,19 @@ export default {
         );
       }
       // Rewrite URL: strip /t/{token} so the MCP handler sees /mcp
+      // Add Authorization header so the original worker's auth also passes
       const rewrittenPath = '/mcp' + (tokenMatch[2] || '');
       const rewrittenUrl = new URL(rewrittenPath, url.origin);
       rewrittenUrl.search = url.search;
-      const rewrittenRequest = new Request(rewrittenUrl.toString(), request);
-      return (
-        ${durableObjectClassName}.serve('/mcp')
-      ).fetch(rewrittenRequest, env, ctx);
+      const rewrittenHeaders = new Headers(request.headers);
+      rewrittenHeaders.set('Authorization', \`Bearer \${env.BEARER_TOKEN}\`);
+      const rewrittenRequest = new Request(rewrittenUrl.toString(), {
+        method: request.method,
+        headers: rewrittenHeaders,
+        body: request.body,
+        duplex: 'half',
+      });
+      return OriginalWorker.fetch(rewrittenRequest, env, ctx);
     }
 
     // Method 2: Bearer header on /mcp
@@ -84,9 +90,7 @@ export default {
       }
     }
 
-    return (
-      ${durableObjectClassName}.serve('/mcp')
-    ).fetch(request, env, ctx);
+    return OriginalWorker.fetch(request, env, ctx);
   },
 };
 `.trim();
