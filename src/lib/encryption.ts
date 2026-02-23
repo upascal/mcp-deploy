@@ -18,7 +18,7 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const SALT = "mcp-deploy-salt"; // static salt is fine — key is already high-entropy
 
-const ENV_LOCAL_PATH = join(process.cwd(), ".env.local");
+const ENV_LOCAL_PATH = join(process.env.MCP_DEPLOY_ROOT || process.cwd(), ".env.local");
 
 /**
  * Ensure ENCRYPTION_KEY exists in .env.local.
@@ -51,9 +51,7 @@ function ensureEncryptionKey(): string {
   }
 
   process.env.ENCRYPTION_KEY = newKey;
-  console.log(
-    "[mcp-deploy] Generated encryption key in .env.local"
-  );
+  console.log("[mcp-deploy] Generated encryption key in .env.local");
   return newKey;
 }
 

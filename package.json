@@ -1,40 +1,82 @@
 {
   "name": "mcp-deploy",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "Deploy and manage MCP (Model Context Protocol) servers on Cloudflare Workers",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cloudflare",
+    "workers",
+    "deployment",
+    "cli",
+    "dashboard"
+  ],
+  "license": "GPL-3.0-only",
+  "main": "./bin/mcp-deploy.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/upascal/mcp-deploy.git"
+  },
+  "homepage": "https://github.com/upascal/mcp-deploy",
+  "bugs": {
+    "url": "https://github.com/upascal/mcp-deploy/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "mcp-deploy": "./bin/mcp-deploy.js"
   },
+  "files": [
+    "bin",
+    "src",
+    "!src/**/__tests__",
+    ".next/standalone",
+    ".next/static",
+    "next.config.ts",
+    "next-env.d.ts",
+    "tsconfig.json",
+    "postcss.config.mjs",
+    "LICENSE",
+    "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "docs/MCP_RELEASE_GUIDE.md"
+  ],
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "dev:find": "lsof -i -P -sTCP:LISTEN | grep -i next || echo 'No dev server running'",
-    "build": "next build",
+    "prepublishOnly": "npm run lint && npx vitest run && npm run build",
+    "build": "next build --webpack && node scripts/postbuild.js",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src bin",
     "bundle": "npx tsx scripts/bundle-workers.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@inquirer/prompts": "^8.2.0",
     "better-sqlite3": "^12.6.2",
     "cloudflare": "^5.2.0",
     "next": "^16.1.6",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.2.0",
     "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.24",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
-    "tsx": "^4.21.0",
     "typescript": "5.9.3",
     "vitest": "^4.0.18"
   }

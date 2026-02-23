@@ -13,7 +13,7 @@ import {
 } from "crypto";
 import { encrypt as currentEncrypt } from "./encryption";
 
-const DATA_DIR = join(process.cwd(), "data");
+const DATA_DIR = join(process.env.MCP_DEPLOY_ROOT || process.cwd(), "data");
 const DB_PATH = join(DATA_DIR, "mcp-deploy.db");
 
 let db: Database.Database | null = null;
@@ -21,18 +21,27 @@ let db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (db) return db;
 
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!existsSync(DATA_DIR)) {
+      mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    db = new Database(DB_PATH);
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+
+    createTables(db);
+    ensureDeploymentsAuthModeColumn(db);
+    ensureDeploymentsOAuthPasswordColumn(db);
+    migrateFromJson(db);
+
+    return db;
+  } catch (err) {
+    db = null;
+    throw new Error(
+      `Failed to initialize database at ${DB_PATH}: ${err instanceof Error ? err.message : err}`
+    );
   }
-
-  db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-
-  createTables(db);
-  migrateFromJson(db);
-
-  return db;
 }
 
 function createTables(db: Database.Database): void {
@@ -52,6 +61,8 @@ function createTables(db: Database.Database): void {
       status TEXT NOT NULL DEFAULT 'not_deployed',
       worker_url TEXT,
       bearer_token TEXT,
+      oauth_password TEXT,
+      auth_mode TEXT NOT NULL DEFAULT 'bearer',
       deployed_at TEXT,
       version TEXT,
       error TEXT
@@ -96,7 +107,52 @@ function createTables(db: Database.Database): void {
       worker_url TEXT PRIMARY KEY,
       slug TEXT NOT NULL
     );
+
+    -- Metadata cache (avoid re-fetching from GitHub on every page load)
+    CREATE TABLE IF NOT EXISTS metadata_cache (
+      slug TEXT PRIMARY KEY,
+      metadata TEXT NOT NULL,
+      bundle_url TEXT NOT NULL,
+      version TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    );
+
+    -- Latest version cache (explicit update checks)
+    CREATE TABLE IF NOT EXISTS latest_version_cache (
+      slug TEXT PRIMARY KEY,
+      latest_version TEXT NOT NULL,
+      checked_at INTEGER NOT NULL
+    );
+
+    -- Indexes for common lookups
+    CREATE INDEX IF NOT EXISTS idx_deployments_slug ON deployments(slug);
+    CREATE INDEX IF NOT EXISTS idx_secrets_slug ON secrets(slug);
+    CREATE INDEX IF NOT EXISTS idx_metadata_cache_slug ON metadata_cache(slug);
+    CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires_at ON oauth_codes(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_oauth_clients_expires_at ON oauth_clients(expires_at);
   `);
+}
+
+function ensureDeploymentsAuthModeColumn(db: Database.Database): void {
+  const columns = db
+    .prepare("PRAGMA table_info(deployments)")
+    .all() as Array<{ name: string }>;
+  const hasAuthMode = columns.some((col) => col.name === "auth_mode");
+  if (!hasAuthMode) {
+    db.exec(
+      "ALTER TABLE deployments ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'bearer'"
+    );
+  }
+}
+
+function ensureDeploymentsOAuthPasswordColumn(db: Database.Database): void {
+  const columns = db
+    .prepare("PRAGMA table_info(deployments)")
+    .all() as Array<{ name: string }>;
+  const hasOauthPassword = columns.some((col) => col.name === "oauth_password");
+  if (!hasOauthPassword) {
+    db.exec("ALTER TABLE deployments ADD COLUMN oauth_password TEXT");
+  }
 }
 
 // ─── JSON → SQLite Migration ───
@@ -161,11 +217,19 @@ function migrateFromJson(db: Database.Database): void {
   const storePath = join(DATA_DIR, "store.json");
   const oauthStorePath = join(DATA_DIR, "oauth-store.json");
 
-  // Check if we already migrated (config table has a marker)
+  // Quick check — already migrated?
   const migrated = db
     .prepare("SELECT value FROM config WHERE key = 'migrated_from_json'")
     .get() as { value: string } | undefined;
   if (migrated) return;
+
+  // Atomically claim migration — if another process already inserted, changes === 0
+  const claim = db
+    .prepare(
+      "INSERT OR IGNORE INTO config (key, value) VALUES ('migrated_from_json', 'in_progress')"
+    )
+    .run();
+  if (claim.changes === 0) return; // Another process owns the migration
 
   // Migrate main store
   if (existsSync(storePath)) {
@@ -290,6 +354,6 @@ function migrateFromJson(db: Database.Database): void {
 
   // Mark migration complete
   db.prepare(
-    "INSERT OR REPLACE INTO config (key, value) VALUES ('migrated_from_json', '1')"
+    "UPDATE config SET value = '1' WHERE key = 'migrated_from_json'"
   ).run();
 }
