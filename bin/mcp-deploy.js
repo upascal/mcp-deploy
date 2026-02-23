@@ -30,7 +30,7 @@ if (command === '-v' || command === '--version') {
 
     // Parse -p / --port flag
     const guiArgs = args.slice(1);
-    let port = '3000';
+    let port = '3838';
     for (let i = 0; i < guiArgs.length; i++) {
         if ((guiArgs[i] === '-p' || guiArgs[i] === '--port') && guiArgs[i + 1]) {
             port = guiArgs[i + 1];
@@ -112,7 +112,7 @@ if (command === '-v' || command === '--version') {
 mcp-deploy - Deploy MCP servers to Cloudflare Workers
 
 Usage:
-  mcp-deploy gui [-p PORT]                Start the web interface (default: 3000)
+  mcp-deploy gui [-p PORT]                Start the web interface (default: 3838)
   mcp-deploy list                         List all MCPs and their status
   mcp-deploy add <github-repo>            Add an MCP from GitHub
   mcp-deploy remove <slug>                Remove an MCP (deletes worker + data)
@@ -127,7 +127,7 @@ Usage:
   mcp-deploy --help                       Show this help message
 
 Examples:
-  mcp-deploy gui                          # Start web UI on http://localhost:3000
+  mcp-deploy gui                          # Start web UI on http://localhost:3838
   mcp-deploy gui -p 3001                  # Start web UI on a different port
   mcp-deploy add upascal/my-mcp-remote    # Add an MCP from GitHub
   mcp-deploy deploy my-mcp                # Deploy to Cloudflare Workers
