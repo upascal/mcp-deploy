@@ -1,13 +1,13 @@
 import {
   fetchMcpMetadata,
   parseGitHubRepo,
-} from "@/lib/github-releases";
+} from "./github-releases";
 import {
   getStoredMcp,
   resolveMcpEntry,
   getBundleContent,
-} from "@/lib/mcp-registry";
-import { isCfConfigured } from "@/lib/cloudflare-config";
+} from "./mcp-registry";
+import { isCfConfigured } from "./cloudflare-config";
 import {
   addMcp as storeAddMcp,
   getMcps,
@@ -19,25 +19,25 @@ import {
   removeMcp as storeRemoveMcp,
   undeployMcp as storeUndeployMcp,
   setLatestVersionCache,
-} from "@/lib/store";
+} from "./store";
 import {
   deployWorker,
   setSecrets,
   deleteSecret,
   deleteWorker,
   ensureKVNamespace,
-} from "@/lib/wrangler";
-import { decrypt, encrypt } from "@/lib/encryption";
-import { generateBearerTokenWrapper } from "@/lib/worker-bearer-wrapper";
-import { generateOAuthWrapper } from "@/lib/worker-oauth-wrapper";
-import { generateOpenWrapper } from "@/lib/worker-open-wrapper";
+} from "./wrangler";
+import { decrypt, encrypt } from "./encryption";
+import { generateBearerTokenWrapper } from "./worker-bearer-wrapper";
+import { generateOAuthWrapper } from "./worker-oauth-wrapper";
+import { generateOpenWrapper } from "./worker-open-wrapper";
 import { randomBytes } from "crypto";
 import type {
   AddMcpResult,
   DeployOptions,
   DeployResult,
   UpdateSecretsResult,
-} from "@/lib/types";
+} from "./types";
 
 const OAUTH_KV_NAMESPACE = "mcp-deploy-oauth";
 
