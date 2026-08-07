@@ -179,6 +179,7 @@ describe("mcp-registry", () => {
           autoSecrets: ["BEARER_TOKEN"],
         },
         bundleUrl: "https://github.com/owner/repo/releases/download/v0.1.0/worker.mjs",
+        metadataUrl: "https://github.com/owner/repo/releases/download/v0.1.0/mcp-deploy.json",
         version: "0.1.0",
       };
 
@@ -220,6 +221,7 @@ describe("mcp-registry", () => {
           autoSecrets: [],
         },
         bundleUrl: "https://example.com/worker.mjs",
+        metadataUrl: "https://example.com/mcp-deploy.json",
         version: "0.2.0",
       };
 

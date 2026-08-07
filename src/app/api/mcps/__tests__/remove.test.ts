@@ -18,6 +18,7 @@ vi.mock("@/lib/validation", () => ({
   isValidSlug: vi.fn((slug: string) => /^[a-z0-9-]+$/.test(slug)),
 }));
 
+import { NextRequest } from "next/server";
 import { DELETE as removeHandler } from "../[slug]/remove/route";
 import { getDeployment, removeMcp } from "@/lib/store";
 import { deleteWorker } from "@/lib/wrangler";
@@ -50,7 +51,7 @@ const mockResolved: ResolvedMcpEntry = {
 };
 
 function makeRequest() {
-  return new Request("http://localhost:3000/api/mcps/test-mcp/remove", {
+  return new NextRequest("http://localhost:3000/api/mcps/test-mcp/remove", {
     method: "DELETE",
   });
 }

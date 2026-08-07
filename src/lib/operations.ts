@@ -103,7 +103,7 @@ export async function deployMcp(
   }
 
   // Check wrangler is logged in
-  const configured = isCfConfigured();
+  const configured = await isCfConfigured();
   if (!configured) {
     throw new Error(
       "Not logged in to Cloudflare. Run `npx wrangler login` first, or use the Settings page."
@@ -318,7 +318,7 @@ export async function updateSecrets(
 
   const resolved = await resolveMcpEntry(entry);
 
-  const configured = isCfConfigured();
+  const configured = await isCfConfigured();
   if (!configured) {
     throw new Error(
       "Not logged in to Cloudflare. Run `npx wrangler login` first."

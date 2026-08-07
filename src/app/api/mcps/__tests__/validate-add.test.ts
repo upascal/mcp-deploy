@@ -36,6 +36,7 @@ const mockMetadata = {
     autoSecrets: [],
   },
   bundleUrl: "https://github.com/owner/repo/releases/download/v0.1.0/worker.mjs",
+  metadataUrl: "https://github.com/owner/repo/releases/download/v0.1.0/mcp-deploy.json",
   version: "0.1.0",
 };
 

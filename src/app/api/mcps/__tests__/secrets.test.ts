@@ -105,7 +105,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
     vi.clearAllMocks();
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
-    vi.mocked(isCfConfigured).mockReturnValue(true);
+    vi.mocked(isCfConfigured).mockResolvedValue(true);
     vi.mocked(getMcpSecrets).mockReturnValue({ EXISTING: "old-value" });
   });
 
@@ -172,7 +172,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
   });
 
   it("should return 400 when not logged in", async () => {
-    vi.mocked(isCfConfigured).mockReturnValue(false);
+    vi.mocked(isCfConfigured).mockResolvedValue(false);
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
       method: "PUT",

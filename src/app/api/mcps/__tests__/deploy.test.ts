@@ -89,7 +89,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(isCfConfigured).mockReturnValue(true);
+    vi.mocked(isCfConfigured).mockResolvedValue(true);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
     vi.mocked(getBundleContent).mockResolvedValue("// bundle code");
     vi.mocked(deployWorker).mockResolvedValue({ url: "https://test-mcp-worker.user.workers.dev" });
@@ -124,7 +124,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   });
 
   it("should return 400 when not logged in to Cloudflare", async () => {
-    vi.mocked(isCfConfigured).mockReturnValue(false);
+    vi.mocked(isCfConfigured).mockResolvedValue(false);
 
     const res = await deployHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),

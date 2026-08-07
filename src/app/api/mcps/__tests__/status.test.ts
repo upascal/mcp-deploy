@@ -160,7 +160,7 @@ describe("GET /api/mcps/[slug]/status", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01",
-      version: null,
+      version: "0.1.0",
     });
 
     const res = await statusHandler(makeRequest(), {
