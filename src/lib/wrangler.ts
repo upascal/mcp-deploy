@@ -391,6 +391,28 @@ export async function deleteSecret(
 // ─── KV Namespace Management ───
 
 /**
+ * Extract the namespace ID from `wrangler kv namespace create` output.
+ * Wrangler 4.x prints a JSON config snippet; older versions printed TOML
+ * (`{ binding = "...", id = "abc123" }`).
+ */
+function parseCreatedNamespaceId(output: string): string | null {
+  const jsonMatch = output.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        kv_namespaces?: { id?: string }[];
+      };
+      const id = parsed.kv_namespaces?.[0]?.id;
+      if (id) return id;
+    } catch {
+      // Not valid JSON — fall through to the regex.
+    }
+  }
+
+  return output.match(/"?\bid"?\s*[:=]\s*"([^"]+)"/)?.[1] ?? null;
+}
+
+/**
  * Ensure a KV namespace exists, creating it if needed.
  * Returns the namespace ID.
  */
@@ -436,19 +458,17 @@ export async function ensureKVNamespace(title: string): Promise<string> {
     }
   );
 
-  // Parse the namespace ID from output
-  // wrangler outputs something like: { binding = "...", id = "abc123" }
-  const idMatch = createOutput.match(/id\s*=\s*"([^"]+)"/);
-  if (!idMatch) {
+  const namespaceId = parseCreatedNamespaceId(createOutput);
+  if (!namespaceId) {
     throw new Error(
       `Failed to parse KV namespace ID from wrangler output: ${createOutput}`
     );
   }
 
   console.log(
-    `[wrangler] Created KV namespace "${title}": ${idMatch[1]}`
+    `[wrangler] Created KV namespace "${title}": ${namespaceId}`
   );
-  return idMatch[1];
+  return namespaceId;
 }
 
 /**

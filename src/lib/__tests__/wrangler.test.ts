@@ -333,6 +333,32 @@ describe("ensureKVNamespace", () => {
     expect(id).toBe("ns-new456");
   });
 
+  it("should parse the JSON snippet emitted by wrangler 4.x", async () => {
+    const createOutput = [
+      " ⛅️ wrangler 4.119.0",
+      "────────────────────",
+      "Resource location: remote",
+      '🌀 Creating namespace with title "mcp-deploy-oauth"',
+      "✨ Success!",
+      "To access your new KV Namespace in your Worker, add the following snippet to your configuration file:",
+      "{",
+      '  "kv_namespaces": [',
+      "    {",
+      '      "binding": "mcp_deploy_oauth",',
+      '      "id": "2b1ccab4d3624cb8b20e1d6552963240"',
+      "    }",
+      "  ]",
+      "}",
+    ].join("\n");
+
+    vi.spyOn(child_process, "execSync")
+      .mockReturnValueOnce("[]" as any)
+      .mockReturnValueOnce(createOutput as any);
+
+    const id = await ensureKVNamespace("mcp-deploy-oauth");
+    expect(id).toBe("2b1ccab4d3624cb8b20e1d6552963240");
+  });
+
   it("should throw if create output has no ID", async () => {
     vi.spyOn(child_process, "execSync")
       .mockReturnValueOnce("[]" as any)
