@@ -5,20 +5,27 @@ on:
     tags:
       - "v*"
 
+permissions:
+  id-token: write # OIDC token for npm trusted publishing
+  contents: write # create the GitHub Release
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version-file: ".nvmrc"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      # Trusted publishing requires npm >= 11.5.1; Node 22 ships 10.9.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
 
       - name: Install
         run: npm ci
@@ -34,10 +41,8 @@ jobs:
 
       - name: Publish to npm
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
