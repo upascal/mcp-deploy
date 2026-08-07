@@ -5,13 +5,12 @@ on:
     tags:
       - "v*"
 
-permissions:
-  id-token: write # OIDC token for npm trusted publishing
-  contents: write # create the GitHub Release
-
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC token for npm trusted publishing
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -42,7 +41,16 @@ jobs:
       - name: Publish to npm
         run: npm publish
 
+  # Kept in a separate job so the third-party action never shares a runner with
+  # id-token: write — otherwise a compromised release action could mint an npm
+  # OIDC token and publish. Pinned to a SHA for the same reason.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           generate_release_notes: true
