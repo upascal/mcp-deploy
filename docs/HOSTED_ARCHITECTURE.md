@@ -1,6 +1,7 @@
 # Hosted mcp-deploy — Architecture Design
 
-Status: **proposal / decision record**
+Status: **decided 2026-08-07** — build Model B on a free/$5 Cloudflare account,
+get it working, and defer the scaling choice. See §10.
 Question: should mcp-deploy become a hosted web app where users get MCPs
 without a Cloudflare account, and if so, where is the boundary between
 "I host it" and "you deploy your own"?
@@ -77,15 +78,34 @@ One `zotero-assistant` worker serves everyone; the caller's identity comes from
 OAuth, and per-user credentials live in KV/D1 keyed by that identity.
 
 - Cheapest: one script per MCP regardless of user count. Instant onboarding.
-- **But it requires rewriting every MCP server.** Today the MCP bundles read
-  credentials from `env.ZOTERO_API_KEY` — a per-worker secret, resolved once at
-  startup. Making them per-user means threading a per-request credential
-  lookup through each server's code, which breaks the whole "publish a
-  `worker.mjs` to a GitHub release and mcp-deploy just runs it" contract.
 - One bad deploy breaks every user at once, and a single compromise exposes
   everyone's keys.
 
-**Rejected for now.** The cost is a rewrite of the thing that currently works.
+> **Correction (2026-08-07).** An earlier draft of this section claimed pooling
+> "requires rewriting every MCP server." That overstates the code cost. Reading
+> `workers/zotero-assistant-mcp.mjs` directly: credentials are read inside
+> `init()` (line 72972), which runs **per Durable Object instance**, not at
+> module scope. DO instances are already addressed by name via `idFromName`
+> (62855), and the `McpAgent` base class already accepts per-instance props
+> injected by the auth layer through the `x-partykit-props` header (62894) —
+> which is Cloudflare's designed channel for handing an authenticated user's
+> claims to their agent. So per-server the change is roughly
+> `this.env.ZOTERO_API_KEY` → `this.props.zoteroApiKey` plus naming the DO after
+> the user id. Two lines, not a rewrite.
+
+The real objection to pooling is therefore not code volume, it is:
+
+- **Contract, not rewrite.** `env.X` is the ordinary Workers convention, so any
+  MCP we did not write ourselves reads credentials that way. Pooling means every
+  MCP in the catalog must adopt our props convention and stay in sync with it —
+  a permanent coordination tax on "add any compatible MCP via a + button."
+- **Custody becomes absolute.** A pooled worker must be able to decrypt *any*
+  user's credentials at runtime, so they live in D1/KV under envelope encryption
+  with the unwrapping key bound to the script. We lose the property that
+  Cloudflare's script boundary does isolation for free, and a code compromise
+  becomes total rather than per-user.
+
+**Rejected for now** — on contract and custody grounds, not effort.
 
 ### Model B — one worker per user, in *our* Cloudflare account ✅ recommended
 
@@ -115,6 +135,48 @@ Keep it. It is the escape hatch for people outside the lab, for anyone who
 doesn't want us holding their credentials, and for anyone who outgrows our
 account limits.
 
+### Model D — Workers for Platforms (the scaling path, not needed yet)
+
+Added 2026-08-07. This is the answer to "Model B has a script ceiling" that does
+**not** require pooling. Workers for Platforms is Cloudflare's product for
+running many isolated per-customer workers. Scripts go into a **dispatch
+namespace** instead of the account's normal script list, which does not count
+against the 100/500 limit and is built to hold thousands. A small **dispatch
+worker** on our own domain routes each request to the right user script via
+`env.DISPATCHER.get(scriptName).fetch(request)`.
+
+Why it fits: user workers still take ordinary secret bindings, so
+`env.ZOTERO_API_KEY` keeps working and the release contract is untouched. It
+keeps every property Model B buys — zero MCP changes, per-user isolation,
+per-worker secrets — and only removes the ceiling.
+
+- **Small diff.** Every call in `src/lib/cloudflare-deploy.ts` hits
+  `/accounts/{id}/workers/scripts/{name}` (lines 138, 179, 202). The platform
+  equivalent is `/accounts/{id}/workers/dispatch/namespaces/{ns}/scripts/{name}`
+  — same multipart upload, same bulk-secrets endpoint. About five call sites.
+  The `subdomain` calls (269, 287) disappear, replaced by dispatch routing.
+- **We own the URLs.** Endpoints become `mcp.ourlab.org/u/alice/zotero/mcp`
+  rather than a `workers.dev` subdomain baked into whatever the user pasted into
+  Claude, so scripts can be renamed or migrated without anyone re-pasting. This
+  also delivers the "use your own domain for MCPs" item in TODO.md.
+- **Auth placement is a choice.** Keeping OAuth/bearer inside each user worker
+  is zero change and the right default. Hoisting it into the dispatch worker
+  later buys central revocation and rejects unauthenticated requests before
+  paying for a dispatch.
+
+⚠️ **Verify before committing to this path:** whether SQLite-backed Durable
+Objects work in dispatch-namespace user workers. We declare `new_sqlite_classes`
+migrations (`src/lib/cloudflare-deploy.ts:113`) because `McpAgent` *is* a
+Durable Object — the MCP session lives in it. DO support in Workers for
+Platforms has carried caveats historically; this is go/no-go and is not
+confirmed here. Cheap test: create a namespace, upload an existing bundle
+unmodified as a user worker, confirm the migration is accepted and a session
+survives.
+
+Cost: a paid add-on with a monthly floor (believed ~$25/mo plus per-script
+pricing — **verify current pricing**, this is from memory). So it bills from
+user one, where Model B on a normal account is free to ~33 users.
+
 ### The boundary, stated plainly
 
 > **We host the control plane for everyone. The data plane defaults to our
@@ -134,6 +196,13 @@ type DeploymentTarget =
 That is a genuinely small abstraction for how much optionality it buys. We do
 not fork the project or maintain two products — the hosted app and the
 self-hosted CLI stay one codebase with a parameter.
+
+Model D extends the same union rather than replacing it, which is why the
+scaling decision can be deferred safely — it is a third case, not a redesign:
+
+```ts
+  | { mode: "platform"; namespace: string };         // Workers for Platforms
+```
 
 ## 4. Sign-in
 
@@ -252,3 +321,30 @@ Each phase is independently shippable and useful on its own.
 Phases 1–2 alone deliver most of the stated value and require no decision about
 secret custody. That is a good place to start regardless of how the Model B
 question ultimately lands.
+
+## 10. Decision — 2026-08-07
+
+**Build Model B on a free (or $5) Cloudflare account. Get it working. Defer the
+scaling choice.**
+
+Rationale: the ceiling is ~33 users free and ~165 paid, which is comfortably
+past a lab's size, and Model D exists as a configuration-level escape hatch if
+we ever approach it. Pooling (Model A) is rejected on contract and custody
+grounds, not effort — and notably, the effort argument that originally justified
+rejecting it turned out to be wrong, so if we ever revisit it, revisit it on the
+real grounds.
+
+What this decision does *not* commit us to: any pooling work, any Workers for
+Platforms spend, and any secret-custody decision until phase 3.
+
+Sequencing follows §9 unchanged. Phases 1–2 are the next work: consolidate on
+`CloudflareDeployService`, retire the `npx wrangler` shell-out in
+`src/lib/wrangler.ts`, move storage off `better-sqlite3`, and get the dashboard
+to a URL. Everything through phase 2 is single-user and reversible.
+
+Two things to check before phase 4, neither blocking now:
+
+- Confirm the 100/500 script limits and the $5 paid tier against current
+  Cloudflare pricing — the numbers here are from the original draft.
+- If we ever pick up Model D, run the Durable Object namespace test in §3
+  *first*. It is go/no-go for that path.
