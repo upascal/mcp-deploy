@@ -239,6 +239,30 @@ export class CloudflareDeployService {
     }
   }
 
+  // ─── KV Namespaces ───
+
+  /**
+   * Ensure a KV namespace exists, creating it if needed. Returns its ID.
+   *
+   * Cloudflare returns 400 if the account already owns a namespace with the
+   * same title, so existing ones are looked up first. Iterating the list
+   * paginates automatically — a title past the first page would otherwise be
+   * missed and trigger a duplicate-title failure.
+   */
+  async ensureKVNamespace(title: string): Promise<string> {
+    for await (const ns of this.client.kv.namespaces.list({
+      account_id: this.accountId,
+    })) {
+      if (ns.title === title) return ns.id;
+    }
+
+    const created = await this.client.kv.namespaces.create({
+      account_id: this.accountId,
+      title,
+    });
+    return created.id;
+  }
+
   // ─── Worker Management ───
 
   /**
