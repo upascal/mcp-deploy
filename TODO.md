@@ -1,34 +1,29 @@
 # mcp-deploy TODO
 
-## High Priority
+## UI
+- [x] Use a more consistent visual design language throughout
+- [x] Add loading state or success message to update buttons (currently too fast, looks like nothing happened)
+- [x] Show a success message after OAuth password setup
 
-- [ ] Fix form validation and automatic credential testing
-- [ ] Fix GitHub releases workflow
-- [ ] CLI integration — add/manage MCPs and secrets from the terminal
+- [x] Oauth password (after deploy) should show instructions for how to use it to configure OAuth in Claude Desktop
+- [x] OAuth consent dialog shows success interstitial before redirecting
 
-## Features
+- [x] add a visible/invisible toggle for oauth password
+- [x] ablity to rotate / change oauth password (like bearer token)
 
-- [ ] `--app` flag for PWA-like experience
-- [ ] Speed up adding MCPs to the dashboard (reduce GitHub API round-trips?)
-- [ ] CLI workflow to add configuration secrets
+## Privacy/Security
+- [x] Audit how secrets are stored/moved in transit (encrypted in SQLite, but what about Cloudflare Worker secrets?)
+- [ ] Should users be able to create their own OAuth passwords?
+- [x] Are OAuth passwords and bearer tokens sufficiently random?
 
-## OAuth (Big Spike)
+## Integrations
+- [ ] Update READMEs of paper-search-mcp and zotero-assistant-mcp with mcp-deploy deployment instructions
 
-> Important: OAuth is a deployment **option**, not a replacement for bearer auth.
+## Reach
+- [ ] `--app` flag for PWA-like experience (manifest.json, service worker)
+- [ ] Verify MCP compatibility with ChatGPT UI custom connectors and Codex MCP
+- [ ] Does OpenAI connector support password-protected remote MCPs?
 
-- [ ] Research Cloudflare MCP SDK OAuth implementation (use Cloudflare docs MCP)
-- [ ] Research Claude connectors OAuth requirements
-- [ ] Review existing work on the OAuth branch
-- [ ] Implement OAuth as an alternative auth mode during deploy
 
-## Tests
-
-- [ ] Improve overall test coverage
-- [ ] Add tests for OAuth implementation
-
-## Done
-
-- [x] Migrate storage from JSON to SQLite
-- [x] Auto-generate encryption key (remove hardcoded fallback)
-- [x] Add tests for db, store, and encryption modules
-- [x] Restore wrangler deployment pipeline
+## premium features
+- [ ] use your own domain for MCPs

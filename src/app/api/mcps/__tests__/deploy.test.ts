@@ -14,6 +14,7 @@ vi.mock("@/lib/wrangler", () => ({
   deployWorker: vi.fn(),
   setSecrets: vi.fn(),
   ensureKVNamespace: vi.fn(),
+  deleteWorker: vi.fn(),
 }));
 
 vi.mock("@/lib/store", () => ({
@@ -21,14 +22,27 @@ vi.mock("@/lib/store", () => ({
   setMcpSecrets: vi.fn(),
   getMcpSecrets: vi.fn(),
   getDeployment: vi.fn(),
+  setLatestVersionCache: vi.fn(),
+  getLatestVersionCache: vi.fn(),
+  getCachedMetadataForDisplay: vi.fn(),
+  deleteCachedMetadata: vi.fn(),
 }));
 
 vi.mock("@/lib/encryption", () => ({
   encrypt: vi.fn((v: string) => `encrypted:${v}`),
+  decrypt: vi.fn((v: string) => v.replace("encrypted:", "")),
 }));
 
 vi.mock("@/lib/worker-bearer-wrapper", () => ({
   generateBearerTokenWrapper: vi.fn(() => "// wrapper code"),
+}));
+
+vi.mock("@/lib/worker-oauth-wrapper", () => ({
+  generateOAuthWrapper: vi.fn(() => "// oauth wrapper code"),
+}));
+
+vi.mock("@/lib/worker-open-wrapper", () => ({
+  generateOpenWrapper: vi.fn(() => "// open wrapper code"),
 }));
 
 import { POST as deployHandler } from "../../mcps/[slug]/deploy/route";
@@ -50,7 +64,7 @@ const mockResolved: ResolvedMcpEntry = {
   githubRepo: "owner/test-mcp-remote",
   name: "Test MCP",
   description: "A test MCP",
-  version: "v0.1.0",
+  version: "0.1.0",
   workerName: "test-mcp-worker",
   durableObjectBinding: "MCP_OBJ",
   durableObjectClassName: "TestMCP",
@@ -163,7 +177,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
         slug: "test-mcp",
         status: "deployed",
         workerUrl: "https://test-mcp-worker.user.workers.dev",
-        version: "v0.1.0",
+        version: "0.1.0",
       })
     );
   });

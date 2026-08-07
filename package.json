@@ -1,6 +1,6 @@
 {
   "name": "mcp-deploy",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "private": false,
   "description": "Deploy and manage MCP (Model Context Protocol) servers on Cloudflare Workers",
   "keywords": [
@@ -16,7 +16,7 @@
   "main": "./bin/mcp-deploy.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/upascal/mcp-deploy.git"
+    "url": "git+https://github.com/upascal/mcp-deploy.git"
   },
   "homepage": "https://github.com/upascal/mcp-deploy",
   "bugs": {
@@ -26,7 +26,7 @@
     "node": ">=20"
   },
   "bin": {
-    "mcp-deploy": "./bin/mcp-deploy.js"
+    "mcp-deploy": "bin/mcp-deploy.js"
   },
   "files": [
     "bin",

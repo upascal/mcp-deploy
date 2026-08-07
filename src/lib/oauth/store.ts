@@ -23,9 +23,9 @@ const CLIENT_TTL = 60 * 60 * 24 * 365; // 1 year
 
 // ─── OAuth Clients (Dynamic Client Registration) ───
 
-export async function getOAuthClient(
+export function getOAuthClient(
   clientId: string
-): Promise<OAuthClient | null> {
+): OAuthClient | null {
   cleanupExpired();
   const row = getDb()
     .prepare(
@@ -37,7 +37,7 @@ export async function getOAuthClient(
   return JSON.parse(row.data) as OAuthClient;
 }
 
-export async function storeOAuthClient(client: OAuthClient): Promise<void> {
+export function storeOAuthClient(client: OAuthClient): void {
   getDb()
     .prepare(
       "INSERT OR REPLACE INTO oauth_clients (client_id, data, expires_at) VALUES (?, ?, ?)"
@@ -45,7 +45,7 @@ export async function storeOAuthClient(client: OAuthClient): Promise<void> {
     .run(client.client_id, JSON.stringify(client), nowSeconds() + CLIENT_TTL);
 }
 
-export async function deleteOAuthClient(clientId: string): Promise<void> {
+export function deleteOAuthClient(clientId: string): void {
   getDb()
     .prepare("DELETE FROM oauth_clients WHERE client_id = ?")
     .run(clientId);
@@ -53,7 +53,7 @@ export async function deleteOAuthClient(clientId: string): Promise<void> {
 
 // ─── Authorization Codes ───
 
-export async function storeAuthCode(code: AuthorizationCode): Promise<void> {
+export function storeAuthCode(code: AuthorizationCode): void {
   getDb()
     .prepare(
       "INSERT OR REPLACE INTO oauth_codes (code, data, expires_at) VALUES (?, ?, ?)"
@@ -61,9 +61,9 @@ export async function storeAuthCode(code: AuthorizationCode): Promise<void> {
     .run(code.code, JSON.stringify(code), nowSeconds() + AUTH_CODE_TTL);
 }
 
-export async function getAuthCode(
+export function getAuthCode(
   code: string
-): Promise<AuthorizationCode | null> {
+): AuthorizationCode | null {
   cleanupExpired();
   const row = getDb()
     .prepare("SELECT data, expires_at FROM oauth_codes WHERE code = ?")
@@ -73,15 +73,15 @@ export async function getAuthCode(
   return JSON.parse(row.data) as AuthorizationCode;
 }
 
-export async function deleteAuthCode(code: string): Promise<void> {
+export function deleteAuthCode(code: string): void {
   getDb().prepare("DELETE FROM oauth_codes WHERE code = ?").run(code);
 }
 
 // ─── Per-Deployment JWT Secrets ───
 
-export async function getDeploymentJWTSecret(
+export function getDeploymentJWTSecret(
   slug: string
-): Promise<string | null> {
+): string | null {
   const row = getDb()
     .prepare("SELECT secret FROM jwt_secrets WHERE slug = ?")
     .get(slug) as { secret: string } | undefined;
@@ -90,10 +90,10 @@ export async function getDeploymentJWTSecret(
   return decrypt(row.secret);
 }
 
-export async function setDeploymentJWTSecret(
+export function setDeploymentJWTSecret(
   slug: string,
   secret: string
-): Promise<void> {
+): void {
   getDb()
     .prepare(
       "INSERT OR REPLACE INTO jwt_secrets (slug, secret) VALUES (?, ?)"
@@ -105,9 +105,9 @@ export async function setDeploymentJWTSecret(
  * Find which deployment slug corresponds to a given worker URL.
  * Used during token issuance to find the JWT secret for a resource.
  */
-export async function getSlugForWorkerUrl(
+export function getSlugForWorkerUrl(
   workerUrl: string
-): Promise<string | null> {
+): string | null {
   const row = getDb()
     .prepare("SELECT slug FROM worker_url_mapping WHERE worker_url = ?")
     .get(workerUrl) as { slug: string } | undefined;
@@ -115,10 +115,10 @@ export async function getSlugForWorkerUrl(
   return row?.slug ?? null;
 }
 
-export async function mapWorkerUrlToSlug(
+export function mapWorkerUrlToSlug(
   workerUrl: string,
   slug: string
-): Promise<void> {
+): void {
   getDb()
     .prepare(
       "INSERT OR REPLACE INTO worker_url_mapping (worker_url, slug) VALUES (?, ?)"

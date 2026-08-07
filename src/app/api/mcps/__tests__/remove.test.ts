@@ -36,7 +36,7 @@ const mockResolved: ResolvedMcpEntry = {
   githubRepo: "owner/test-mcp-remote",
   name: "Test MCP",
   description: "A test MCP",
-  version: "v0.1.0",
+  version: "0.1.0",
   workerName: "test-mcp-worker",
   durableObjectBinding: "MCP_OBJ",
   durableObjectClassName: "TestMCP",
@@ -83,7 +83,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01",
-      version: "v0.1.0",
+      version: "0.1.0",
     });
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
@@ -109,7 +109,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01",
-      version: "v0.1.0",
+      version: "0.1.0",
     });
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
@@ -155,7 +155,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01",
-      version: "v0.1.0",
+      version: "0.1.0",
     });
     vi.mocked(getStoredMcp).mockResolvedValue(undefined);
 
@@ -179,7 +179,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01",
-      version: "v0.1.0",
+      version: "0.1.0",
     });
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockRejectedValue(new Error("Resolution failed"));

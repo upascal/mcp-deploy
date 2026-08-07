@@ -65,7 +65,7 @@ describe("GET /api/mcps/[slug]/status", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01T00:00:00.000Z",
-      version: "v0.1.0",
+      version: "0.1.0",
     });
     vi.mocked(checkHealth).mockResolvedValue({
       healthy: true,
@@ -97,7 +97,7 @@ describe("GET /api/mcps/[slug]/status", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01",
-      version: "v0.1.0",
+      version: "0.1.0",
     });
     vi.mocked(checkHealth).mockResolvedValue({
       healthy: false,
@@ -184,7 +184,7 @@ describe("GET /api/mcps/[slug]/status", () => {
       oauthPassword: null,
       authMode: "bearer",
       deployedAt: "2024-01-01",
-      version: "v0.1.0",
+      version: "0.1.0",
     });
     vi.mocked(checkHealth).mockRejectedValue(new Error("Network timeout"));
 

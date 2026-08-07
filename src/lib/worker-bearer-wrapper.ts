@@ -24,6 +24,19 @@ export function generateBearerTokenWrapper(
 import OriginalWorker from './original.mjs';
 export { ${durableObjectClassName} } from './original.mjs';
 
+// ─── Constant-time comparison ───
+
+function constantTimeEqual(a, b) {
+  const len = Math.max(a.length, b.length);
+  let result = a.length ^ b.length;
+  for (let i = 0; i < len; i++) {
+    const aChar = a.charCodeAt(i) || 0;
+    const bChar = b.charCodeAt(i) || 0;
+    result |= aChar ^ bChar;
+  }
+  return result === 0;
+}
+
 // ─── Worker fetch handler ───
 
 export default {
@@ -51,7 +64,7 @@ export default {
     const tokenMatch = url.pathname.match(/^\\/mcp\\/t\\/([^/]+)(\\/.*)?$/);
     if (tokenMatch) {
       const urlToken = tokenMatch[1];
-      if (!env.BEARER_TOKEN || urlToken !== env.BEARER_TOKEN) {
+      if (!env.BEARER_TOKEN || !constantTimeEqual(urlToken, env.BEARER_TOKEN)) {
         return new Response(
           JSON.stringify({ error: 'Unauthorized' }),
           { status: 401, headers: { 'content-type': 'application/json' } }
@@ -76,7 +89,7 @@ export default {
     // Method 2: Bearer header on /mcp
     if (url.pathname.startsWith('/mcp')) {
       const auth = request.headers.get('Authorization');
-      if (!env.BEARER_TOKEN || !auth || auth !== \`Bearer \${env.BEARER_TOKEN}\`) {
+      if (!env.BEARER_TOKEN || !auth || !constantTimeEqual(auth, \`Bearer \${env.BEARER_TOKEN}\`)) {
         return new Response(
           JSON.stringify({ error: 'Unauthorized' }),
           {

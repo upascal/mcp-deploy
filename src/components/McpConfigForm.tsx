@@ -35,7 +35,7 @@ export function McpConfigForm({ fields, values, onChange }: McpConfigFormProps) 
               onChange={(e) =>
                 onChange({ ...values, [field.key]: e.target.value })
               }
-              className="w-full px-4 py-2.5 bg-surface-raised border border-edge-subtle rounded-lg text-sm text-fg focus:outline-none focus:border-accent-edge"
+              className="w-full px-4 py-2.5 bg-surface-raised border border-edge-subtle rounded-lg text-sm text-fg focus:outline-none focus:border-accent-edge focus:ring-1 focus:ring-accent-edge"
             >
               {field.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -50,7 +50,7 @@ export function McpConfigForm({ fields, values, onChange }: McpConfigFormProps) 
               onChange={(e) =>
                 onChange({ ...values, [field.key]: e.target.value })
               }
-              className="w-full px-4 py-2.5 bg-surface-raised border border-edge-subtle rounded-lg text-sm text-fg focus:outline-none focus:border-accent-edge"
+              className="w-full px-4 py-2.5 bg-surface-raised border border-edge-subtle rounded-lg text-sm text-fg focus:outline-none focus:border-accent-edge focus:ring-1 focus:ring-accent-edge"
             />
           )}
         </div>

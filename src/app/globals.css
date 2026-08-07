@@ -74,8 +74,8 @@
   --accent-edge: #6366f1;     /* indigo-500 */
 
   /* Success (emerald) */
-  --success: #059669;         /* emerald-600 */
-  --success-mid: #047857;     /* emerald-700 */
+  --success: #10b981;         /* emerald-500 */
+  --success-mid: #059669;     /* emerald-600 */
 
   /* Danger (red) */
   --danger: #dc2626;          /* red-600 */
@@ -116,8 +116,8 @@
     --accent-fg: #4f46e5;
     --accent-edge: #6366f1;
 
-    --success: #059669;
-    --success-mid: #047857;
+    --success: #10b981;
+    --success-mid: #059669;
 
     --danger: #dc2626;
     --danger-mid: #b91c1c;
@@ -200,8 +200,8 @@ button:focus {
   outline: none;
 }
 
-/* Ensure consistent dark background for ALL form control states.
-   Using !important to override any browser defaults that cause white
+/* Ensure consistent background for ALL form control states.
+   Using !important to override any browser defaults that cause
    flash when toggling between password/text input types. */
 input[type="password"],
 input[type="text"],
@@ -215,4 +215,10 @@ input[type="password"]:not(:focus),
 input[type="text"]:not(:focus),
 input[type="email"]:not(:focus) {
   background-color: var(--surface-raised) !important;
+}
+
+/* ── Selection highlight ───────────────────────────────────── */
+::selection {
+  background-color: var(--accent-edge);
+  color: #fff;
 }

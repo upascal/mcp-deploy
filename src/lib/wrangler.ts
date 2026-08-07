@@ -1,7 +1,9 @@
 /**
  * Wrangler CLI wrapper for Cloudflare operations.
  *
- * Shells out to `npx wrangler` for all Cloudflare interactions:
+ * Resolves the wrangler binary once and caches the path to avoid
+ * repeated npx resolution overhead (~10s per call).
+ *
  * - Login/auth (wrangler login, wrangler whoami)
  * - Worker deployment (wrangler deploy from temp dir)
  * - Secret management (wrangler secret bulk)
@@ -17,17 +19,117 @@ import { join } from "path";
 import { tmpdir } from "os";
 import type { ResolvedMcpEntry } from "./types";
 
+// ─── Wrangler binary resolution ───
+
+let _wranglerCmd: string | null = null;
+
+/**
+ * Resolve the wrangler binary path once, then cache it.
+ * Tries `which wrangler` first (instant if globally installed),
+ * falls back to the npx-resolved path.
+ */
+function getWranglerCmd(): string {
+  if (_wranglerCmd) return _wranglerCmd;
+
+  // Try global / npm-linked wrangler first
+  try {
+    const path = execSync("which wrangler 2>/dev/null", {
+      encoding: "utf-8",
+      timeout: 3000,
+    }).trim();
+    if (path) {
+      _wranglerCmd = path;
+      return _wranglerCmd;
+    }
+  } catch {
+    // not found globally
+  }
+
+  // Try local node_modules/.bin
+  try {
+    const path = execSync("npx -y which wrangler 2>/dev/null", {
+      encoding: "utf-8",
+      timeout: 15000,
+    }).trim();
+    if (path) {
+      _wranglerCmd = path;
+      return _wranglerCmd;
+    }
+  } catch {
+    // not found via npx which
+  }
+
+  // Fallback: use npx -y wrangler (slower but always works)
+  _wranglerCmd = "npx -y wrangler";
+  return _wranglerCmd;
+}
+
+/** @internal For testing only. */
+export function _setWranglerCmd(cmd: string | null): void {
+  _wranglerCmd = cmd;
+}
+
+/** Build a shell command string using the resolved wrangler binary. */
+function wranglerExec(args: string): string {
+  return `${getWranglerCmd()} ${args}`;
+}
+
+// ─── Validation ───
+
+const WORKER_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const SECRET_NAME_RE = /^[a-zA-Z0-9_]+$/;
+
+function validateWorkerName(name: string): void {
+  if (!WORKER_NAME_RE.test(name)) {
+    throw new Error(
+      `Invalid worker name "${name}": must match ${WORKER_NAME_RE}`
+    );
+  }
+}
+
+function validateSecretName(name: string): void {
+  if (!SECRET_NAME_RE.test(name)) {
+    throw new Error(
+      `Invalid secret name "${name}": must match ${SECRET_NAME_RE}`
+    );
+  }
+}
+
 // ─── Auth ───
+
+const LOGIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+let _loginCache: {
+  result: { loggedIn: boolean; account?: string };
+  timestamp: number;
+} | null = null;
+
+/** @internal For testing only. */
+export function _setLoginCache(
+  cache: { result: { loggedIn: boolean; account?: string }; timestamp: number } | null
+): void {
+  _loginCache = cache;
+}
+
+/** Clear the login cache (called before wranglerLogin to force re-check). */
+export function invalidateLoginCache(): void {
+  _loginCache = null;
+}
 
 /**
  * Check if wrangler is logged in to Cloudflare.
+ * Results are cached for 5 minutes to avoid blocking page loads.
  */
 export function checkWranglerLogin(): {
   loggedIn: boolean;
   account?: string;
 } {
+  if (_loginCache && Date.now() - _loginCache.timestamp < LOGIN_CACHE_TTL_MS) {
+    return _loginCache.result;
+  }
+
   try {
-    const output = execSync("npx wrangler whoami 2>&1", {
+    const output = execSync(wranglerExec("whoami 2>&1"), {
       encoding: "utf-8",
       timeout: 15000,
     });
@@ -41,12 +143,18 @@ export function checkWranglerLogin(): {
         /associated with the email ([^\s!]+)/
       );
       const account = emailMatch ? emailMatch[1] : undefined;
-      return { loggedIn: true, account };
+      const result = { loggedIn: true, account };
+      _loginCache = { result, timestamp: Date.now() };
+      return result;
     }
 
-    return { loggedIn: false };
+    const result = { loggedIn: false };
+    _loginCache = { result, timestamp: Date.now() };
+    return result;
   } catch {
-    return { loggedIn: false };
+    const result = { loggedIn: false };
+    _loginCache = { result, timestamp: Date.now() };
+    return result;
   }
 }
 
@@ -57,8 +165,9 @@ export async function wranglerLogin(): Promise<{
   success: boolean;
   error?: string;
 }> {
+  invalidateLoginCache();
   return new Promise((resolve) => {
-    const child = exec("npx wrangler login", {
+    const child = exec(wranglerExec("login"), {
       timeout: 120000,
     });
 
@@ -150,12 +259,24 @@ export async function deployWorker(
 
     // Run wrangler deploy
     console.log(`[wrangler] Deploying ${entry.workerName} from ${tempDir}...`);
-    const deployOutput = execSync("npx wrangler deploy 2>&1", {
-      cwd: tempDir,
-      encoding: "utf-8",
-      timeout: 120000,
-    });
-    console.log("[wrangler] Deploy output:", deployOutput);
+    let deployOutput = "";
+    try {
+      deployOutput = execSync(wranglerExec("deploy 2>&1"), {
+        cwd: tempDir,
+        encoding: "utf-8",
+        timeout: 120000,
+      });
+    } catch (err: unknown) {
+      const stdout = ((err as { stdout?: Buffer })?.stdout ?? "").toString();
+      const stderr = ((err as { stderr?: Buffer })?.stderr ?? "").toString();
+      const detail = [stdout, stderr].filter(Boolean).join("\n").trim();
+      throw new Error(
+        detail
+          ? `wrangler deploy failed: ${detail}`
+          : `wrangler deploy failed: ${err instanceof Error ? err.message : "unknown error"}`
+      );
+    }
+    // Deploy output may contain sensitive info, so we don't log it
 
     // Parse URL from output
     const urlMatch = deployOutput.match(/https:\/\/[^\s]+\.workers\.dev/);
@@ -180,9 +301,10 @@ export async function deployWorker(
  * Check if a worker already exists on Cloudflare.
  */
 function checkWorkerExists(workerName: string): boolean {
+  validateWorkerName(workerName);
   try {
     const output = execSync(
-      `npx wrangler deployments list --name ${workerName} 2>&1`,
+      wranglerExec(`deployments list --name ${workerName} 2>&1`),
       {
         encoding: "utf-8",
         timeout: 15000,
@@ -205,9 +327,12 @@ export async function setSecrets(
   workerName: string,
   secrets: Record<string, string>
 ): Promise<void> {
-  // Filter out empty values
+  validateWorkerName(workerName);
+
+  // Filter out empty values and validate secret names
   const filtered: Record<string, string> = {};
   for (const [name, value] of Object.entries(secrets)) {
+    validateSecretName(name);
     if (value) {
       filtered[name] = value;
     }
@@ -215,19 +340,30 @@ export async function setSecrets(
 
   if (Object.keys(filtered).length === 0) return;
 
-  const secretsJson = JSON.stringify(filtered);
+  // Write secrets to a temp file to avoid shell injection via echo pipe
+  const tempDir = mkdtempSync(join(tmpdir(), "mcp-secrets-"));
+  const tempFile = join(tempDir, "secrets.json");
+  try {
+    writeFileSync(tempFile, JSON.stringify(filtered));
 
-  console.log(
-    `[wrangler] Setting ${Object.keys(filtered).length} secrets on ${workerName}...`
-  );
-  execSync(
-    `echo '${secretsJson.replace(/'/g, "'\\''")}' | npx wrangler secret bulk --name ${workerName} 2>&1`,
-    {
-      encoding: "utf-8",
-      timeout: 30000,
+    console.log(
+      `[wrangler] Setting ${Object.keys(filtered).length} secrets on ${workerName}...`
+    );
+    execSync(
+      wranglerExec(`secret bulk "${tempFile}" --name ${workerName} 2>&1`),
+      {
+        encoding: "utf-8",
+        timeout: 30000,
+      }
+    );
+    console.log("[wrangler] Secrets set successfully");
+  } finally {
+    try {
+      rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
     }
-  );
-  console.log("[wrangler] Secrets set successfully");
+  }
 }
 
 /**
@@ -237,9 +373,11 @@ export async function deleteSecret(
   workerName: string,
   secretName: string
 ): Promise<void> {
+  validateWorkerName(workerName);
+  validateSecretName(secretName);
   try {
     execSync(
-      `npx wrangler secret delete ${secretName} --name ${workerName} --force 2>&1`,
+      wranglerExec(`secret delete ${secretName} --name ${workerName} --force 2>&1`),
       {
         encoding: "utf-8",
         timeout: 15000,
@@ -259,7 +397,7 @@ export async function deleteSecret(
 export async function ensureKVNamespace(title: string): Promise<string> {
   // List existing namespaces
   try {
-    const output = execSync("npx wrangler kv namespace list 2>&1", {
+    const output = execSync(wranglerExec("kv namespace list 2>&1"), {
       encoding: "utf-8",
       timeout: 15000,
     });
@@ -268,16 +406,20 @@ export async function ensureKVNamespace(title: string): Promise<string> {
     // The output may have non-JSON text before the JSON array
     const jsonMatch = output.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      const namespaces = JSON.parse(jsonMatch[0]) as {
-        id: string;
-        title: string;
-      }[];
-      const found = namespaces.find((ns) => ns.title === title);
-      if (found) {
-        console.log(
-          `[wrangler] KV namespace "${title}" already exists: ${found.id}`
-        );
-        return found.id;
+      try {
+        const namespaces = JSON.parse(jsonMatch[0]) as {
+          id: string;
+          title: string;
+        }[];
+        const found = namespaces.find((ns) => ns.title === title);
+        if (found) {
+          console.log(
+            `[wrangler] KV namespace "${title}" already exists: ${found.id}`
+          );
+          return found.id;
+        }
+      } catch {
+        console.warn("[wrangler] Failed to parse KV namespace list, will attempt to create");
       }
     }
   } catch {
@@ -287,7 +429,7 @@ export async function ensureKVNamespace(title: string): Promise<string> {
   // Create the namespace
   console.log(`[wrangler] Creating KV namespace "${title}"...`);
   const createOutput = execSync(
-    `npx wrangler kv namespace create "${title}" 2>&1`,
+    wranglerExec(`kv namespace create "${title}" 2>&1`),
     {
       encoding: "utf-8",
       timeout: 15000,
@@ -326,7 +468,7 @@ export async function writeKVValue(
   try {
     writeFileSync(tempFile, value);
     execSync(
-      `npx wrangler kv key put --namespace-id ${namespaceId} "${key}" --path "${tempFile}" --remote${ttlArg} 2>&1`,
+      wranglerExec(`kv key put --namespace-id ${namespaceId} "${key}" --path "${tempFile}" --remote${ttlArg} 2>&1`),
       {
         encoding: "utf-8",
         timeout: 15000,
@@ -370,7 +512,8 @@ export async function checkHealth(
  * Delete a worker from Cloudflare.
  */
 export async function deleteWorker(workerName: string): Promise<void> {
-  execSync(`npx wrangler delete --name ${workerName} --force 2>&1`, {
+  validateWorkerName(workerName);
+  execSync(wranglerExec(`delete --name ${workerName} --force 2>&1`), {
     encoding: "utf-8",
     timeout: 30000,
   });

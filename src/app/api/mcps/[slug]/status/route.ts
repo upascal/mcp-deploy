@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getStoredMcp } from "@/lib/mcp-registry";
-import { CloudflareDeployService } from "@/lib/cloudflare-deploy";
-import { getCfToken, getCfAccountId, getDeployment } from "@/lib/store";
+import { checkHealth } from "@/lib/wrangler";
+import { getDeployment } from "@/lib/store";
+import { isValidSlug } from "@/lib/validation";
 
 export async function GET(
   _request: Request,
@@ -9,12 +10,15 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+    if (!isValidSlug(slug)) {
+      return NextResponse.json({ error: "Invalid slug format" }, { status: 400 });
+    }
     const entry = await getStoredMcp(slug);
     if (!entry) {
       return NextResponse.json({ error: "MCP not found" }, { status: 404 });
     }
 
-    const deployment = await getDeployment(slug);
+    const deployment = getDeployment(slug);
     if (!deployment?.workerUrl) {
       return NextResponse.json({
         slug,
@@ -23,22 +27,7 @@ export async function GET(
       });
     }
 
-    const [cfToken, cfAccountId] = await Promise.all([
-      getCfToken(),
-      getCfAccountId(),
-    ]);
-
-    if (!cfToken || !cfAccountId) {
-      return NextResponse.json({
-        slug,
-        status: deployment.status,
-        healthy: false,
-        error: "Cloudflare not configured",
-      });
-    }
-
-    const service = new CloudflareDeployService(cfToken, cfAccountId);
-    const health = await service.checkHealth(deployment.workerUrl);
+    const health = await checkHealth(deployment.workerUrl);
 
     return NextResponse.json({
       slug,

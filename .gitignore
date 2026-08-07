@@ -26,9 +26,17 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# npm pack artifacts
+*.tgz
 /reference-folder/*
 
-# sqlite
+# ui review notes
+.ui-review/
+
+# sqlite & data files
 data/*.db
 data/*.db-*
 data/*.bak
+data/*.json
+data/.test-*/

@@ -16,13 +16,15 @@ export default function SetupPage() {
 
       {/* Appearance */}
       <section className="rounded-xl border border-edge bg-surface p-6 space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">Appearance</h2>
-          <p className="text-fg-muted text-sm mt-1">
-            Choose a color theme for the dashboard.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Appearance</h2>
+            <p className="text-fg-muted text-sm mt-1">
+              Choose a color theme for the dashboard.
+            </p>
+          </div>
+          <ThemeToggle />
         </div>
-        <ThemeToggle />
       </section>
 
       {/* About */}

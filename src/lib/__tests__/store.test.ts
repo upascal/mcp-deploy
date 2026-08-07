@@ -43,6 +43,8 @@ function createSchema(db: Database.Database) {
       status TEXT NOT NULL DEFAULT 'not_deployed',
       worker_url TEXT,
       bearer_token TEXT,
+      oauth_password TEXT,
+      auth_mode TEXT NOT NULL DEFAULT 'bearer',
       deployed_at TEXT,
       version TEXT,
       error TEXT
@@ -56,6 +58,26 @@ function createSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS config (
       key TEXT PRIMARY KEY,
       value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS jwt_secrets (
+      slug TEXT PRIMARY KEY,
+      secret TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS worker_url_mapping (
+      worker_url TEXT PRIMARY KEY,
+      slug TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS metadata_cache (
+      slug TEXT PRIMARY KEY,
+      metadata TEXT NOT NULL,
+      bundle_url TEXT NOT NULL,
+      version TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS latest_version_cache (
+      slug TEXT PRIMARY KEY,
+      latest_version TEXT NOT NULL,
+      checked_at INTEGER NOT NULL
     );
   `);
 }
@@ -81,13 +103,13 @@ describe("store", () => {
   // ─── MCPs ───
 
   describe("getMcps / setMcps", () => {
-    it("should return empty array when no MCPs", async () => {
-      const mcps = await getMcps();
+    it("should return empty array when no MCPs", () => {
+      const mcps = getMcps();
       expect(mcps).toEqual([]);
     });
 
-    it("should store and retrieve MCPs", async () => {
-      await setMcps([
+    it("should store and retrieve MCPs", () => {
+      setMcps([
         {
           slug: "test-mcp",
           githubRepo: "user/repo",
@@ -97,15 +119,15 @@ describe("store", () => {
         },
       ]);
 
-      const mcps = await getMcps();
+      const mcps = getMcps();
       expect(mcps).toHaveLength(1);
       expect(mcps[0].slug).toBe("test-mcp");
       expect(mcps[0].githubRepo).toBe("user/repo");
       expect(mcps[0].isDefault).toBe(true);
     });
 
-    it("should replace all MCPs on setMcps", async () => {
-      await setMcps([
+    it("should replace all MCPs on setMcps", () => {
+      setMcps([
         {
           slug: "mcp-a",
           githubRepo: "user/a",
@@ -114,7 +136,7 @@ describe("store", () => {
         },
       ]);
 
-      await setMcps([
+      setMcps([
         {
           slug: "mcp-b",
           githubRepo: "user/b",
@@ -123,74 +145,127 @@ describe("store", () => {
         },
       ]);
 
-      const mcps = await getMcps();
+      const mcps = getMcps();
       expect(mcps).toHaveLength(1);
       expect(mcps[0].slug).toBe("mcp-b");
     });
   });
 
   describe("addMcp", () => {
-    it("should add an MCP", async () => {
-      await addMcp({
+    it("should add an MCP", () => {
+      addMcp({
         slug: "new-mcp",
         githubRepo: "user/new",
         releaseTag: "latest",
         addedAt: "2026-01-01T00:00:00Z",
       });
 
-      const mcps = await getMcps();
+      const mcps = getMcps();
       expect(mcps).toHaveLength(1);
       expect(mcps[0].slug).toBe("new-mcp");
     });
 
-    it("should throw on duplicate slug", async () => {
-      await addMcp({
+    it("should throw on duplicate slug", () => {
+      addMcp({
         slug: "dup",
         githubRepo: "user/a",
         releaseTag: "latest",
         addedAt: "2026-01-01T00:00:00Z",
       });
 
-      await expect(
+      expect(() =>
         addMcp({
           slug: "dup",
           githubRepo: "user/b",
           releaseTag: "latest",
           addedAt: "2026-01-02T00:00:00Z",
         })
-      ).rejects.toThrow('MCP with slug "dup" already exists');
+      ).toThrow('MCP with slug "dup" already exists');
     });
   });
 
   describe("removeMcp", () => {
-    it("should remove an MCP by slug", async () => {
-      await addMcp({
+    it("should remove an MCP by slug", () => {
+      addMcp({
         slug: "to-remove",
         githubRepo: "user/repo",
         releaseTag: "latest",
         addedAt: "2026-01-01T00:00:00Z",
       });
 
-      await removeMcp("to-remove");
-      const mcps = await getMcps();
+      removeMcp("to-remove");
+      const mcps = getMcps();
       expect(mcps).toHaveLength(0);
     });
 
-    it("should not throw when removing non-existent slug", async () => {
-      await expect(removeMcp("nonexistent")).resolves.toBeUndefined();
+    it("should not throw when removing non-existent slug", () => {
+      expect(() => removeMcp("nonexistent")).not.toThrow();
+    });
+
+    it("should cascade-delete all related data", () => {
+      const slug = "cascade-test";
+
+      // Insert MCP
+      addMcp({
+        slug,
+        githubRepo: "user/repo",
+        releaseTag: "latest",
+        addedAt: "2026-01-01T00:00:00Z",
+      });
+
+      // Insert related records directly
+      testDb
+        .prepare(
+          "INSERT INTO deployments (slug, status, version) VALUES (?, 'deployed', 'v1')"
+        )
+        .run(slug);
+      testDb
+        .prepare("INSERT INTO secrets (slug, key, value) VALUES (?, 'KEY', 'val')")
+        .run(slug);
+      testDb
+        .prepare("INSERT INTO jwt_secrets (slug, secret) VALUES (?, 'jwt-secret')")
+        .run(slug);
+      testDb
+        .prepare(
+          "INSERT INTO worker_url_mapping (worker_url, slug) VALUES ('https://test.workers.dev', ?)"
+        )
+        .run(slug);
+      testDb
+        .prepare(
+          "INSERT INTO metadata_cache (slug, metadata, bundle_url, version, fetched_at) VALUES (?, '{}', 'url', 'v1', 0)"
+        )
+        .run(slug);
+
+      // Remove — should cascade
+      removeMcp(slug);
+
+      // Verify all tables are clean
+      const mcp = testDb.prepare("SELECT * FROM mcps WHERE slug = ?").get(slug);
+      const dep = testDb.prepare("SELECT * FROM deployments WHERE slug = ?").get(slug);
+      const sec = testDb.prepare("SELECT * FROM secrets WHERE slug = ?").get(slug);
+      const jwt = testDb.prepare("SELECT * FROM jwt_secrets WHERE slug = ?").get(slug);
+      const url = testDb.prepare("SELECT * FROM worker_url_mapping WHERE slug = ?").get(slug);
+      const cache = testDb.prepare("SELECT * FROM metadata_cache WHERE slug = ?").get(slug);
+
+      expect(mcp).toBeUndefined();
+      expect(dep).toBeUndefined();
+      expect(sec).toBeUndefined();
+      expect(jwt).toBeUndefined();
+      expect(url).toBeUndefined();
+      expect(cache).toBeUndefined();
     });
   });
 
   // ─── Deployments ───
 
   describe("getDeployment / setDeployment", () => {
-    it("should return null for non-existent deployment", async () => {
-      const dep = await getDeployment("nonexistent");
+    it("should return null for non-existent deployment", () => {
+      const dep = getDeployment("nonexistent");
       expect(dep).toBeNull();
     });
 
-    it("should store and retrieve a deployment", async () => {
-      await setDeployment({
+    it("should store and retrieve a deployment", () => {
+      setDeployment({
         slug: "test",
         status: "deployed",
         workerUrl: "https://test.workers.dev",
@@ -199,7 +274,7 @@ describe("store", () => {
         version: "v1.0",
       });
 
-      const dep = await getDeployment("test");
+      const dep = getDeployment("test");
       expect(dep).not.toBeNull();
       expect(dep!.slug).toBe("test");
       expect(dep!.status).toBe("deployed");
@@ -208,8 +283,8 @@ describe("store", () => {
       expect(dep!.version).toBe("v1.0");
     });
 
-    it("should upsert deployment on repeated set", async () => {
-      await setDeployment({
+    it("should upsert deployment on repeated set", () => {
+      setDeployment({
         slug: "test",
         status: "deployed",
         workerUrl: "https://test.workers.dev",
@@ -218,7 +293,7 @@ describe("store", () => {
         version: "v1.0",
       });
 
-      await setDeployment({
+      setDeployment({
         slug: "test",
         status: "deployed",
         workerUrl: "https://test.workers.dev",
@@ -227,13 +302,13 @@ describe("store", () => {
         version: "v2.0",
       });
 
-      const dep = await getDeployment("test");
+      const dep = getDeployment("test");
       expect(dep!.version).toBe("v2.0");
       expect(dep!.bearerToken).toBe("new-token");
     });
 
-    it("should handle error field", async () => {
-      await setDeployment({
+    it("should handle error field", () => {
+      setDeployment({
         slug: "failed",
         status: "failed",
         workerUrl: null,
@@ -243,13 +318,13 @@ describe("store", () => {
         error: "Deploy failed: timeout",
       });
 
-      const dep = await getDeployment("failed");
+      const dep = getDeployment("failed");
       expect(dep!.status).toBe("failed");
       expect(dep!.error).toBe("Deploy failed: timeout");
     });
 
-    it("should omit error field when null", async () => {
-      await setDeployment({
+    it("should omit error field when null", () => {
+      setDeployment({
         slug: "ok",
         status: "deployed",
         workerUrl: "https://ok.workers.dev",
@@ -258,19 +333,19 @@ describe("store", () => {
         version: "v1.0",
       });
 
-      const dep = await getDeployment("ok");
+      const dep = getDeployment("ok");
       expect(dep!.error).toBeUndefined();
     });
   });
 
   describe("getMcpBearerToken", () => {
-    it("should return null when no deployment exists", async () => {
-      const token = await getMcpBearerToken("nonexistent");
+    it("should return null when no deployment exists", () => {
+      const token = getMcpBearerToken("nonexistent");
       expect(token).toBeNull();
     });
 
-    it("should return bearer token from deployment", async () => {
-      await setDeployment({
+    it("should return bearer token from deployment", () => {
+      setDeployment({
         slug: "test",
         status: "deployed",
         workerUrl: "https://test.workers.dev",
@@ -279,7 +354,7 @@ describe("store", () => {
         version: "v1.0",
       });
 
-      const token = await getMcpBearerToken("test");
+      const token = getMcpBearerToken("test");
       expect(token).toBe("the-token");
     });
   });
@@ -287,49 +362,49 @@ describe("store", () => {
   // ─── Secrets ───
 
   describe("getMcpSecrets / setMcpSecrets", () => {
-    it("should return null when no secrets exist", async () => {
-      const secrets = await getMcpSecrets("nonexistent");
+    it("should return null when no secrets exist", () => {
+      const secrets = getMcpSecrets("nonexistent");
       expect(secrets).toBeNull();
     });
 
-    it("should store and retrieve secrets", async () => {
-      await setMcpSecrets("test", {
+    it("should store and retrieve secrets", () => {
+      setMcpSecrets("test", {
         API_KEY: "key123",
         API_SECRET: "secret456",
       });
 
-      const secrets = await getMcpSecrets("test");
+      const secrets = getMcpSecrets("test");
       expect(secrets).toEqual({
         API_KEY: "key123",
         API_SECRET: "secret456",
       });
     });
 
-    it("should replace secrets on repeated set", async () => {
-      await setMcpSecrets("test", { OLD_KEY: "old" });
-      await setMcpSecrets("test", { NEW_KEY: "new" });
+    it("should replace secrets on repeated set", () => {
+      setMcpSecrets("test", { OLD_KEY: "old" });
+      setMcpSecrets("test", { NEW_KEY: "new" });
 
-      const secrets = await getMcpSecrets("test");
+      const secrets = getMcpSecrets("test");
       expect(secrets).toEqual({ NEW_KEY: "new" });
       expect(secrets!.OLD_KEY).toBeUndefined();
     });
 
-    it("should skip empty string values", async () => {
-      await setMcpSecrets("test", {
+    it("should skip empty string values", () => {
+      setMcpSecrets("test", {
         FILLED: "value",
         EMPTY: "",
       });
 
-      const secrets = await getMcpSecrets("test");
+      const secrets = getMcpSecrets("test");
       expect(secrets).toEqual({ FILLED: "value" });
     });
 
-    it("should isolate secrets per slug", async () => {
-      await setMcpSecrets("mcp-a", { KEY_A: "a" });
-      await setMcpSecrets("mcp-b", { KEY_B: "b" });
+    it("should isolate secrets per slug", () => {
+      setMcpSecrets("mcp-a", { KEY_A: "a" });
+      setMcpSecrets("mcp-b", { KEY_B: "b" });
 
-      const secretsA = await getMcpSecrets("mcp-a");
-      const secretsB = await getMcpSecrets("mcp-b");
+      const secretsA = getMcpSecrets("mcp-a");
+      const secretsB = getMcpSecrets("mcp-b");
 
       expect(secretsA).toEqual({ KEY_A: "a" });
       expect(secretsB).toEqual({ KEY_B: "b" });
@@ -339,19 +414,19 @@ describe("store", () => {
   // ─── Seeding ───
 
   describe("seeding defaults", () => {
-    it("should default to false", async () => {
-      expect(await hasSeededDefaults()).toBe(false);
+    it("should default to false", () => {
+      expect(hasSeededDefaults()).toBe(false);
     });
 
-    it("should mark seeded defaults", async () => {
-      await markSeededDefaults();
-      expect(await hasSeededDefaults()).toBe(true);
+    it("should mark seeded defaults", () => {
+      markSeededDefaults();
+      expect(hasSeededDefaults()).toBe(true);
     });
 
-    it("should reset seeded defaults", async () => {
-      await markSeededDefaults();
-      await resetSeededDefaults();
-      expect(await hasSeededDefaults()).toBe(false);
+    it("should reset seeded defaults", () => {
+      markSeededDefaults();
+      resetSeededDefaults();
+      expect(hasSeededDefaults()).toBe(false);
     });
   });
 });

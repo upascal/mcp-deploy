@@ -112,3 +112,36 @@ export interface DeploymentRecord {
 export interface McpSecretsRecord {
   [key: string]: string; // encrypted values
 }
+
+// ─── Operation types (shared between GUI routes and CLI) ───
+
+export interface DeployOptions {
+  authMode: "bearer" | "oauth" | "open";
+  secrets: Record<string, string>;
+  config: Record<string, string>;
+  regenerateToken?: boolean;
+  regenerateOAuthPassword?: boolean;
+}
+
+export interface DeployResult {
+  workerUrl: string;
+  mcpUrl: string;
+  mcpUrlWithToken?: string;
+  bearerToken: string | null;
+  oauthPassword: string | null;
+  authMode: "bearer" | "oauth" | "open";
+  oauthEnabled: boolean;
+  version: string;
+}
+
+export interface AddMcpResult {
+  slug: string;
+  name: string;
+  version: string;
+  githubRepo: string;
+}
+
+export interface UpdateSecretsResult {
+  updatedKeys: string[];
+  deletedKeys: string[];
+}

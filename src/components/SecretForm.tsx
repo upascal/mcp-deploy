@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { EyeIcon } from "./EyeIcon";
+import { ExternalLinkIcon } from "./ExternalLinkIcon";
 import type { SecretField } from "@/lib/types";
 
 interface SecretFormProps {
@@ -25,6 +27,7 @@ export function SecretForm({
   });
 
   const [values, setValues] = useState<Record<string, string>>({});
+  const [visible, setVisible] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
@@ -242,16 +245,16 @@ export function SecretForm({
 
         return (
           <div key={field.key}>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-1.5">
+            <label className="flex items-center gap-2 text-sm font-medium text-fg-secondary mb-1.5">
               {field.label}
               {field.required ? (
-                <span className="text-indigo-400 text-xs">required</span>
+                <span className="text-accent-fg text-xs">required</span>
               ) : (
-                <span className="text-gray-500 text-xs">optional</span>
+                <span className="text-fg-faint text-xs">optional</span>
               )}
             </label>
             {field.helpText && (
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-fg-faint mb-2">
                 {field.helpText}
                 {field.helpUrl && (
                   <>
@@ -260,9 +263,9 @@ export function SecretForm({
                       href={field.helpUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-indigo-400 hover:underline"
+                      className="text-accent-fg hover:underline"
                     >
-                      Get key &rarr;
+                      Get key <ExternalLinkIcon />
                     </a>
                   </>
                 )}
@@ -273,13 +276,13 @@ export function SecretForm({
             {isConfigured && !isEditing ? (
               // Configured but not editing - show masked value
               <div className="flex gap-2">
-                <div className="flex-1 px-4 py-2.5 bg-gray-800/50 border border-emerald-500/30 rounded-lg text-sm text-gray-400 font-mono">
+                <div className="flex-1 px-4 py-2.5 bg-surface-raised/50 border border-success-mid/30 rounded-lg text-sm text-fg-muted font-mono">
                   ••••••••••••
                 </div>
                 <button
                   type="button"
                   onClick={() => startEditing(field.key)}
-                  className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                  className="px-4 py-2.5 bg-surface-overlay hover:bg-edge-subtle text-fg-secondary text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
                 >
                   Change
                 </button>
@@ -287,7 +290,7 @@ export function SecretForm({
                   type="button"
                   onClick={() => deleteSecret(field.key)}
                   disabled={deletingKey === field.key}
-                  className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+                  className="px-4 py-2.5 bg-danger-mid/10 hover:bg-danger-mid/20 border border-danger-mid/30 text-danger text-sm font-medium rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
                 >
                   {deletingKey === field.key ? "Clearing..." : "Clear"}
                 </button>
@@ -297,7 +300,7 @@ export function SecretForm({
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input
-                    type={field.type === "password" ? "password" : "text"}
+                    type={field.type === "password" && !visible[field.key] ? "password" : "text"}
                     id={`${slug}-update-${field.key}`}
                     name={`${slug}-update-${field.key}`}
                     autoComplete="off"
@@ -309,8 +312,17 @@ export function SecretForm({
                     }
                     onBlur={() => handleBlur(field)}
                     placeholder={field.placeholder}
-                    className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    className={`w-full px-4 py-2.5 bg-surface-raised border border-edge-subtle rounded-lg text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent-edge focus:ring-1 focus:ring-accent-edge${field.type === "password" ? " pr-10" : ""}`}
                   />
+                  {field.type === "password" && (
+                    <button
+                      type="button"
+                      onClick={() => setVisible({ ...visible, [field.key]: !visible[field.key] })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-faint hover:text-fg-secondary transition-colors"
+                    >
+                      <EyeIcon open={visible[field.key] ?? false} />
+                    </button>
+                  )}
                 </div>
                 {/* Test button - only show when there's a test spec and a value to test */}
                 {hasTestSpec && hasNewValue && (
@@ -318,7 +330,7 @@ export function SecretForm({
                     type="button"
                     onClick={() => testConnection(field)}
                     disabled={testingKey === field.key}
-                    className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                    className="px-4 py-2.5 bg-surface-overlay hover:bg-edge-subtle disabled:bg-surface-raised disabled:text-fg-disabled text-fg-secondary text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
                   >
                     {testingKey === field.key ? "Testing..." : "Test"}
                   </button>
@@ -338,7 +350,7 @@ export function SecretForm({
                         },
                       });
                     }}
-                    className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                    className="px-4 py-2.5 bg-surface-overlay hover:bg-edge-subtle text-fg-muted text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
                   >
                     Cancel
                   </button>
@@ -350,8 +362,8 @@ export function SecretForm({
               <p
                 className={`text-xs mt-2 ${
                   testResults[field.key].success
-                    ? "text-emerald-400"
-                    : "text-red-400"
+                    ? "text-success"
+                    : "text-danger"
                 }`}
               >
                 {testResults[field.key].success ? "✓" : "✗"}{" "}
@@ -366,8 +378,8 @@ export function SecretForm({
         <p
           className={`text-sm rounded-lg px-4 py-2 ${
             message.type === "success"
-              ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20"
-              : "text-red-400 bg-red-500/10 border border-red-500/20"
+              ? "text-success bg-success-mid/10 border border-success-mid/20"
+              : "text-danger bg-danger-mid/10 border border-danger-mid/20"
           }`}
         >
           {message.text}
@@ -379,7 +391,7 @@ export function SecretForm({
         <button
           type="submit"
           disabled={loading}
-          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+          className="px-6 py-2.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
         >
           {loading ? "Saving..." : "Save Changes"}
         </button>

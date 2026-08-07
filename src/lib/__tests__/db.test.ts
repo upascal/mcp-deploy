@@ -41,15 +41,17 @@ describe("db module", () => {
         added_at TEXT NOT NULL,
         is_default INTEGER DEFAULT 0
       );
-      CREATE TABLE IF NOT EXISTS deployments (
-        slug TEXT PRIMARY KEY,
-        status TEXT NOT NULL DEFAULT 'not_deployed',
-        worker_url TEXT,
-        bearer_token TEXT,
-        deployed_at TEXT,
-        version TEXT,
-        error TEXT
-      );
+    CREATE TABLE IF NOT EXISTS deployments (
+      slug TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'not_deployed',
+      worker_url TEXT,
+      bearer_token TEXT,
+      oauth_password TEXT,
+      auth_mode TEXT NOT NULL DEFAULT 'bearer',
+      deployed_at TEXT,
+      version TEXT,
+      error TEXT
+    );
       CREATE TABLE IF NOT EXISTS secrets (
         slug TEXT NOT NULL,
         key TEXT NOT NULL,
@@ -140,15 +142,17 @@ describe("db module", () => {
   it("should handle deployment upsert with INSERT OR REPLACE", () => {
     const db = new Database(testDbPath);
     db.exec(`
-      CREATE TABLE IF NOT EXISTS deployments (
-        slug TEXT PRIMARY KEY,
-        status TEXT NOT NULL DEFAULT 'not_deployed',
-        worker_url TEXT,
-        bearer_token TEXT,
-        deployed_at TEXT,
-        version TEXT,
-        error TEXT
-      );
+    CREATE TABLE IF NOT EXISTS deployments (
+      slug TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'not_deployed',
+      worker_url TEXT,
+      bearer_token TEXT,
+      oauth_password TEXT,
+      auth_mode TEXT NOT NULL DEFAULT 'bearer',
+      deployed_at TEXT,
+      version TEXT,
+      error TEXT
+    );
     `);
 
     // Insert

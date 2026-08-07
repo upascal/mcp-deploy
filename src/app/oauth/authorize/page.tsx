@@ -26,7 +26,7 @@ function AuthorizeContent() {
   return (
     <div className="min-h-screen bg-surface-page flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="border border-edge rounded-2xl bg-surface/80 p-8">
+        <div className="border border-edge rounded-xl bg-surface p-8">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="w-12 h-12 rounded-full bg-accent-edge/20 flex items-center justify-center mx-auto mb-4">
@@ -44,7 +44,7 @@ function AuthorizeContent() {
                 />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-white">
+            <h1 className="text-xl font-bold text-fg">
               Authorize MCP Access
             </h1>
             <p className="text-fg-muted text-sm mt-2">

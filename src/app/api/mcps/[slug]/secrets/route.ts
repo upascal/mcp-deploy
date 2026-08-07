@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { getStoredMcp, resolveMcpEntry } from "@/lib/mcp-registry";
-import { CloudflareDeployService } from "@/lib/cloudflare-deploy";
-import {
-  getCfToken,
-  getCfAccountId,
-  getMcpSecrets,
-  setMcpSecrets,
-} from "@/lib/store";
+import { getMcpSecrets } from "@/lib/store";
+import { isValidSlug, isValidSecretsObject, isValidSecretKey } from "@/lib/validation";
+import { updateSecrets } from "@/lib/operations";
 
 /**
  * GET: Return which secret keys are configured (not their values).
@@ -17,13 +13,16 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+    if (!isValidSlug(slug)) {
+      return NextResponse.json({ error: "Invalid slug format" }, { status: 400 });
+    }
     const entry = await getStoredMcp(slug);
     if (!entry) {
       return NextResponse.json({ error: "MCP not found" }, { status: 404 });
     }
 
     const resolved = await resolveMcpEntry(entry);
-    const secrets = await getMcpSecrets(slug);
+    const secrets = getMcpSecrets(slug);
     const configuredKeys = secrets ? Object.keys(secrets) : [];
 
     return NextResponse.json({
@@ -47,28 +46,29 @@ export async function PUT(
 ) {
   try {
     const { slug } = await params;
-    const entry = await getStoredMcp(slug);
-    if (!entry) {
-      return NextResponse.json({ error: "MCP not found" }, { status: 404 });
-    }
-
-    const resolved = await resolveMcpEntry(entry);
-
-    const [cfToken, cfAccountId] = await Promise.all([
-      getCfToken(),
-      getCfAccountId(),
-    ]);
-
-    if (!cfToken || !cfAccountId) {
-      return NextResponse.json(
-        { error: "Cloudflare not configured" },
-        { status: 400 }
-      );
+    if (!isValidSlug(slug)) {
+      return NextResponse.json({ error: "Invalid slug format" }, { status: 400 });
     }
 
     const body = await request.json();
     const newSecrets: Record<string, string> = body.secrets ?? {};
     const deleteKeys: string[] = body.deleteKeys ?? [];
+
+    // Validate secrets format
+    if (newSecrets && !isValidSecretsObject(newSecrets)) {
+      return NextResponse.json(
+        { error: "Invalid secrets format" },
+        { status: 400 }
+      );
+    }
+
+    // Validate deleteKeys
+    if (!Array.isArray(deleteKeys) || !deleteKeys.every(k => isValidSecretKey(k))) {
+      return NextResponse.json(
+        { error: "Invalid deleteKeys format" },
+        { status: 400 }
+      );
+    }
 
     if (Object.keys(newSecrets).length === 0 && deleteKeys.length === 0) {
       return NextResponse.json(
@@ -77,31 +77,23 @@ export async function PUT(
       );
     }
 
-    const service = new CloudflareDeployService(cfToken, cfAccountId);
-
-    // Delete secrets from Cloudflare
-    for (const key of deleteKeys) {
-      await service.deleteSecret(resolved.workerName, key);
-    }
-
-    // Update secrets on Cloudflare
-    await service.setSecrets(resolved.workerName, newSecrets);
-
-    // Update stored secrets (merge with existing, remove deleted)
-    const existing = (await getMcpSecrets(slug)) ?? {};
-    const merged = { ...existing, ...newSecrets };
-    for (const key of deleteKeys) {
-      delete merged[key];
-    }
-    await setMcpSecrets(slug, merged);
+    const result = await updateSecrets(slug, newSecrets, deleteKeys);
 
     return NextResponse.json({
       success: true,
-      updatedKeys: Object.keys(newSecrets),
-      deletedKeys: deleteKeys,
+      updatedKeys: result.updatedKeys,
+      deletedKeys: result.deletedKeys,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
+
+    if (message === "MCP not found") {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    if (message.includes("Not logged in to Cloudflare")) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

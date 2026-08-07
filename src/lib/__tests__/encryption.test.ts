@@ -106,4 +106,73 @@ describe("encryption", () => {
 
     expect(decrypted).toBe(plaintext);
   });
+
+  it("should throw on corrupted ciphertext", async () => {
+    const { encrypt, decrypt } = await import("../encryption");
+
+    const encrypted = encrypt("test-data");
+    const parts = encrypted.split(":");
+
+    // Corrupt the ciphertext by changing one character
+    const corruptedCiphertext = parts[2].slice(0, -2) + "ff";
+    const corrupted = `${parts[0]}:${parts[1]}:${corruptedCiphertext}`;
+
+    expect(() => decrypt(corrupted)).toThrow();
+  });
+
+  it("should throw on corrupted IV", async () => {
+    const { encrypt, decrypt } = await import("../encryption");
+
+    const encrypted = encrypt("test-data");
+    const parts = encrypted.split(":");
+
+    // Corrupt the IV
+    const corruptedIV = "0".repeat(32);
+    const corrupted = `${corruptedIV}:${parts[1]}:${parts[2]}`;
+
+    expect(() => decrypt(corrupted)).toThrow();
+  });
+
+  it("should throw on corrupted auth tag", async () => {
+    const { encrypt, decrypt } = await import("../encryption");
+
+    const encrypted = encrypt("test-data");
+    const parts = encrypted.split(":");
+
+    // Corrupt the auth tag
+    const corruptedTag = "f".repeat(32);
+    const corrupted = `${parts[0]}:${corruptedTag}:${parts[2]}`;
+
+    expect(() => decrypt(corrupted)).toThrow();
+  });
+
+  it("should throw on non-hex IV", async () => {
+    const { decrypt } = await import("../encryption");
+
+    const invalid = "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz:abc123abc123abc123abc123abc12:abc123";
+    expect(() => decrypt(invalid)).toThrow();
+  });
+
+  it("should throw on non-hex auth tag", async () => {
+    const { decrypt } = await import("../encryption");
+
+    const invalid = "abc123abc123abc123abc123abc12345:zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz:abc123";
+    expect(() => decrypt(invalid)).toThrow();
+  });
+
+  it("should throw on wrong IV length", async () => {
+    const { decrypt } = await import("../encryption");
+
+    const invalid = "abc:abc123abc123abc123abc123abc12345:abc123";
+    // The crypto library may throw its own error for invalid IV length
+    expect(() => decrypt(invalid)).toThrow();
+  });
+
+  it("should throw on wrong auth tag length", async () => {
+    const { decrypt } = await import("../encryption");
+
+    const invalid = "abc123abc123abc123abc123abc12345:abc:abc123";
+    // The crypto library throws its own error for invalid auth tag length
+    expect(() => decrypt(invalid)).toThrow();
+  });
 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllMcps, checkForUpdate } from "@/lib/mcp-registry";
-import { getDeployment, setLatestVersionCache } from "@/lib/store";
+import { getDeployment, getCachedMetadataForDisplay, setLatestVersionCache } from "@/lib/store";
 
 /**
  * Explicitly check for updates on GitHub.
@@ -25,9 +25,11 @@ export async function POST(request: NextRequest) {
       entries.map(async (entry) => {
         try {
           const deployment = getDeployment(entry.slug);
+          const cached = getCachedMetadataForDisplay(entry.slug);
+          const currentVersion = deployment?.version ?? cached?.version ?? null;
           const { updateAvailable, latestVersion } = await checkForUpdate(
             entry,
-            deployment?.version ?? null
+            currentVersion
           );
 
           // Store in latest_version_cache

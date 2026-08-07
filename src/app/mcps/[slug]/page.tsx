@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState, useRef, use } from "react";
+import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SecretForm } from "@/components/SecretForm";
 import { McpConfigForm } from "@/components/McpConfigForm";
 import { ClaudeConfigSnippet } from "@/components/ClaudeConfigSnippet";
+import { EyeIcon } from "@/components/EyeIcon";
+import { ExternalLinkIcon } from "@/components/ExternalLinkIcon";
 import type { DeploymentRecord, SecretField, ConfigField } from "@/lib/types";
 
 interface McpDetailData {
@@ -41,59 +44,18 @@ interface DeployResult {
   error?: string;
 }
 
-function EyeIcon({ open }: { open: boolean }) {
-  if (open) {
-    return (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-        />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-        />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      className="w-4 h-4"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-      />
-    </svg>
-  );
-}
-
 export default function McpDetailPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const router = useRouter();
   const [data, setData] = useState<McpDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [deploying, setDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
-  const [passwordCopied, setPasswordCopied] = useState(false);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const [secretVisible, setSecretVisible] = useState<Record<string, boolean>>(
@@ -112,6 +74,12 @@ export default function McpDetailPage({
   const [authMode, setAuthMode] = useState<"bearer" | "oauth" | "open">(
     "bearer"
   );
+  const [regenerateAuth, setRegenerateAuth] = useState(false);
+  const [regenerateSuccess, setRegenerateSuccess] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateCheckResult, setUpdateCheckResult] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [undeploying, setUndeploying] = useState(false);
 
   // Track which keys have been auto-tested to avoid duplicate tests
   const autoTestedRef = useRef<Set<string>>(new Set());
@@ -224,7 +192,7 @@ export default function McpDetailPage({
         }
         setConfigValues(defaults);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [slug]);
 
@@ -234,16 +202,22 @@ export default function McpDetailPage({
       fetch(`/api/mcps/${slug}/status`)
         .then((r) => r.json())
         .then(setHealth)
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [slug, data?.deployment?.status]);
 
   async function handleDeploy() {
     if (!isDeployed && !validateForm()) return;
 
+    if (regenerateAuth && isDeployed) {
+      const authLabel = authMode === "oauth" ? "OAuth password" : "bearer token";
+      if (!confirm(`This will regenerate your ${authLabel} and invalidate existing connections. Continue?`)) return;
+    }
+
     setDeploying(true);
     setDeployError(null);
     setDeployResult(null);
+    setRegenerateSuccess(false);
 
     try {
       const res = await fetch(`/api/mcps/${slug}/deploy`, {
@@ -251,8 +225,12 @@ export default function McpDetailPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           secrets: secretValues,
-          config: configValues,
+          config: Object.fromEntries(
+            Object.entries(configValues).filter(([, v]) => v !== "")
+          ),
           authMode,
+          ...(regenerateAuth && authMode === "bearer" ? { regenerateToken: true } : {}),
+          ...(regenerateAuth && authMode === "oauth" ? { regenerateOAuthPassword: true } : {}),
         }),
       });
       const result = await res.json();
@@ -261,11 +239,15 @@ export default function McpDetailPage({
         setDeployError(result.error ?? "Deployment failed");
       } else {
         setDeployResult(result);
+        if (regenerateAuth) {
+          setRegenerateSuccess(true);
+        }
         // Refresh data
         const refreshed = await fetch(`/api/mcps/${slug}`).then((r) =>
           r.json()
         );
         setData(refreshed);
+        setRegenerateAuth(false);
       }
     } catch {
       setDeployError("Failed to connect to server");
@@ -274,10 +256,33 @@ export default function McpDetailPage({
     }
   }
 
+  async function handleCheckForUpdate() {
+    setCheckingUpdate(true);
+    setUpdateCheckResult(null);
+    try {
+      await fetch("/api/mcps/check-updates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slugs: [slug] }),
+      });
+      // Refresh data to pick up new update status
+      const refreshed = await fetch(`/api/mcps/${slug}`).then((r) => r.json());
+      setData(refreshed);
+      setUpdateCheckResult(
+        refreshed.updateAvailable ? "Update available!" : "Already up to date"
+      );
+      setTimeout(() => setUpdateCheckResult(null), 3000);
+    } catch {
+      // silently fail
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500">Loading...</div>
+        <div className="text-fg-faint">Loading...</div>
       </div>
     );
   }
@@ -285,7 +290,7 @@ export default function McpDetailPage({
   if (!data) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-500">MCP not found.</p>
+        <p className="text-fg-faint">MCP not found.</p>
       </div>
     );
   }
@@ -360,17 +365,48 @@ export default function McpDetailPage({
             <h1 className="text-2xl font-bold">{data.name}</h1>
             <StatusBadge status={data.deployment?.status ?? "not_deployed"} />
           </div>
-          <p className="text-gray-400 text-sm">{data.description}</p>
-          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+          <p className="text-fg-muted text-sm">{data.description}</p>
+          <div className="flex items-center gap-4 mt-2 text-xs text-fg-faint">
             <span>v{data.version}</span>
+            <button
+              onClick={handleCheckForUpdate}
+              disabled={checkingUpdate}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-surface-raised hover:bg-surface-overlay border border-edge-subtle rounded-lg text-xs text-fg-secondary transition-colors disabled:opacity-50"
+            >
+              <svg
+                className={`w-3 h-3 ${checkingUpdate ? "animate-spin" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              {checkingUpdate ? "Checking..." : "Check for updates"}
+            </button>
+            {updateCheckResult && (
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  updateCheckResult === "Update available!"
+                    ? "bg-success-mid/10 text-success"
+                    : "bg-surface-overlay/50 text-fg-muted"
+                }`}
+              >
+                {updateCheckResult}
+              </span>
+            )}
             {data.githubRepo && (
               <a
                 href={`https://github.com/${data.githubRepo}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-indigo-400 hover:underline"
+                className="text-accent-fg hover:underline"
               >
-                Source &rarr;
+                Source <ExternalLinkIcon />
               </a>
             )}
           </div>
@@ -380,25 +416,23 @@ export default function McpDetailPage({
       {/* Health Status */}
       {isDeployed && health && (
         <div
-          className={`border rounded-xl p-4 ${
-            health.healthy
-              ? "border-emerald-500/30 bg-emerald-500/5"
-              : "border-red-500/30 bg-red-500/5"
-          }`}
+          className={`border rounded-xl p-4 ${health.healthy
+              ? "border-success-mid/30 bg-success-mid/5"
+              : "border-danger-mid/30 bg-danger-mid/5"
+            }`}
         >
           <div className="flex items-center gap-2 text-sm">
             <span
-              className={`w-2 h-2 rounded-full ${
-                health.healthy ? "bg-emerald-400" : "bg-red-400"
-              }`}
+              className={`w-2 h-2 rounded-full ${health.healthy ? "bg-success" : "bg-danger"
+                }`}
             />
             <span
-              className={health.healthy ? "text-emerald-400" : "text-red-400"}
+              className={health.healthy ? "text-success" : "text-danger"}
             >
               {health.healthy ? "Healthy" : "Unhealthy"}
             </span>
             {data.deployment?.workerUrl && (
-              <span className="text-gray-500 ml-2">
+              <span className="text-fg-faint ml-2">
                 {data.deployment.workerUrl}
               </span>
             )}
@@ -408,12 +442,12 @@ export default function McpDetailPage({
 
       {/* Update Available Banner */}
       {data.updateAvailable && data.deployedVersion && data.latestVersion && (
-        <div className="border border-teal-500/30 bg-teal-500/5 rounded-xl p-4">
+        <div className="border border-info-mid/30 bg-info-mid/5 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-info-mid/20 flex items-center justify-center">
                 <svg
-                  className="w-4 h-4 text-teal-400"
+                  className="w-4 h-4 text-info"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -427,20 +461,28 @@ export default function McpDetailPage({
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-medium text-teal-400">
+                <p className="text-sm font-medium text-info">
                   Update Available
                 </p>
-                <p className="text-xs text-gray-400">
-                  {data.deployedVersion} → {data.latestVersion}
+                <p className="text-xs text-fg-muted">
+                  {data.deployedVersion ?? data.version} → {data.latestVersion}
                 </p>
               </div>
             </div>
             <button
               onClick={handleDeploy}
               disabled={deploying}
-              className="px-4 py-2 bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/30 text-teal-400 text-sm font-medium rounded-lg transition-colors"
+              className="px-4 py-2 bg-info-mid/20 hover:bg-info-mid/30 border border-info-mid/30 text-info text-sm font-medium rounded-lg transition-colors disabled:opacity-60"
             >
-              {deploying ? "Updating..." : "Update Now"}
+              {deploying ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Updating…
+                </span>
+              ) : "Update Now"}
             </button>
           </div>
         </div>
@@ -448,8 +490,8 @@ export default function McpDetailPage({
 
       {/* Deployment Error */}
       {data.deployment?.status === "failed" && data.deployment.error && (
-        <div className="border border-red-500/30 bg-red-500/5 rounded-xl p-4">
-          <p className="text-sm text-red-400">
+        <div className="border border-danger-mid/30 bg-danger-mid/5 rounded-xl p-4">
+          <p className="text-sm text-danger">
             Last deployment failed: {data.deployment.error}
           </p>
         </div>
@@ -457,7 +499,7 @@ export default function McpDetailPage({
 
       {/* Configuration */}
       {(data.config ?? []).length > 0 && (
-        <div className="border border-gray-800 rounded-xl p-6 bg-gray-900/50">
+        <div className="border border-edge rounded-xl p-6 bg-surface/80">
           <h2 className="text-lg font-semibold mb-4">Configuration</h2>
           <McpConfigForm
             fields={data.config}
@@ -469,225 +511,104 @@ export default function McpDetailPage({
 
       {/* Secrets — for initial deploy */}
       {!isDeployed && visibleSecrets.length > 0 && (
-        <div className="border border-gray-800 rounded-xl p-6 bg-gray-900/50">
+        <div className="border border-edge rounded-xl p-6 bg-surface/80">
           <h2 className="text-lg font-semibold mb-4">API Keys</h2>
           <div className="space-y-4">
             {visibleSecrets.map((field) => (
-                <div key={field.key}>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-1.5">
-                    {field.label}
-                    {field.required ? (
-                      <span className="text-indigo-400 text-xs">required</span>
-                    ) : (
-                      <span className="text-gray-500 text-xs">optional</span>
-                    )}
-                  </label>
-                  {field.helpText && (
-                    <p className="text-xs text-gray-500 mb-2">
-                      {field.helpText}
-                      {field.helpUrl && (
-                        <>
-                          {" "}
-                          <a
-                            href={field.helpUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-indigo-400 hover:underline"
-                          >
-                            Get key &rarr;
-                          </a>
-                        </>
-                      )}
-                    </p>
+              <div key={field.key}>
+                <label className="flex items-center gap-2 text-sm font-medium text-fg-secondary mb-1.5">
+                  {field.label}
+                  {field.required ? (
+                    <span className="text-accent-fg text-xs">required</span>
+                  ) : (
+                    <span className="text-fg-faint text-xs">optional</span>
                   )}
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type={
-                          field.type === "password" && !secretVisible[field.key]
-                            ? "password"
-                            : "text"
-                        }
-                        id={`${slug}-${field.key}`}
-                        name={`${slug}-${field.key}`}
-                        autoComplete="off"
-                        data-1p-ignore
-                        data-lpignore="true"
-                        value={secretValues[field.key] ?? ""}
-                        onChange={(e) =>
-                          handleSecretChange(field.key, e.target.value)
-                        }
-                        onBlur={() => handleSecretBlur(field)}
-                        placeholder={field.placeholder}
-                        className={`w-full px-4 py-2.5 pr-10 bg-gray-800 border rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 ${
-                          validationErrors[field.key]
-                            ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                            : "border-gray-700 focus:border-indigo-500 focus:ring-indigo-500"
-                        }`}
-                      />
-                      {field.type === "password" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSecretVisible({
-                              ...secretVisible,
-                              [field.key]: !secretVisible[field.key],
-                            })
-                          }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                </label>
+                {field.helpText && (
+                  <p className="text-xs text-fg-faint mb-2">
+                    {field.helpText}
+                    {field.helpUrl && (
+                      <>
+                        {" "}
+                        <a
+                          href={field.helpUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent-fg hover:underline"
                         >
-                          <EyeIcon open={secretVisible[field.key] ?? false} />
-                        </button>
-                      )}
-                    </div>
+                          Get key <ExternalLinkIcon />
+                        </a>
+                      </>
+                    )}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={
+                        field.type === "password" && !secretVisible[field.key]
+                          ? "password"
+                          : "text"
+                      }
+                      id={`${slug}-${field.key}`}
+                      name={`${slug}-${field.key}`}
+                      autoComplete="off"
+                      data-1p-ignore
+                      data-lpignore="true"
+                      value={secretValues[field.key] ?? ""}
+                      onChange={(e) =>
+                        handleSecretChange(field.key, e.target.value)
+                      }
+                      onBlur={() => handleSecretBlur(field)}
+                      placeholder={field.placeholder}
+                      className={`w-full px-4 py-2.5 pr-10 bg-surface-raised border rounded-lg text-sm text-fg placeholder-fg-faint focus:outline-none focus:ring-1 ${validationErrors[field.key]
+                          ? "border-danger-mid focus:border-danger-mid focus:ring-danger-mid"
+                          : "border-edge-subtle focus:border-accent-edge focus:ring-accent-edge"
+                        }`}
+                    />
+                    {field.type === "password" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSecretVisible({
+                            ...secretVisible,
+                            [field.key]: !secretVisible[field.key],
+                          })
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-faint hover:text-fg-secondary transition-colors"
+                      >
+                        <EyeIcon open={secretVisible[field.key] ?? false} />
+                      </button>
+                    )}
                   </div>
-                  {testResults[field.key] && (
-                    <p
-                      className={`text-xs mt-2 ${
-                        testResults[field.key].success
-                          ? "text-emerald-400"
-                          : "text-red-400"
+                </div>
+                {testResults[field.key] && (
+                  <p
+                    className={`text-xs mt-2 ${testResults[field.key].success
+                        ? "text-success"
+                        : "text-danger"
                       }`}
-                    >
-                      {testResults[field.key].success ? "✓" : "✗"}{" "}
-                      {testResults[field.key].message}
-                    </p>
-                  )}
-                  {validationErrors[field.key] && (
-                    <p className="text-xs mt-1.5 text-red-400">
-                      {validationErrors[field.key]}
-                    </p>
-                  )}
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Deploy Button */}
-      <div className="border border-gray-800 rounded-xl p-6 bg-gray-900/50">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">
-              {isDeployed ? "Redeploy" : "Deploy"}
-            </h2>
-            <p className="text-sm text-gray-400 mt-1">
-              {isDeployed
-                ? "Redeploy with the latest bundle and configuration."
-                : "Deploy this MCP server to your Cloudflare Workers account."}
-            </p>
-          </div>
-          <button
-            onClick={handleDeploy}
-            disabled={deploying || hasRequiredFieldsMissing}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {deploying
-              ? "Deploying..."
-              : isDeployed
-                ? "Redeploy"
-                : "Deploy to Cloudflare"}
-          </button>
-        </div>
-
-        <div className="mt-5">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Authentication
-          </label>
-          <select
-            value={authMode}
-            onChange={(e) =>
-              setAuthMode(e.target.value as "bearer" | "oauth" | "open")
-            }
-            className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="bearer">Bearer token (default)</option>
-            <option value="oauth">OAuth 2.1 (password protected)</option>
-            <option value="open">Open (no authentication)</option>
-          </select>
-          {authMode === "oauth" && (
-            <p className="text-xs text-gray-500 mt-2">
-              OAuth requires a password prompt during authorization. Bearer tokens are not accepted.
-            </p>
-          )}
-          {authMode === "open" && (
-            <p className="text-xs text-red-400 mt-2">
-              Warning: Anyone with the URL can access this MCP.
-            </p>
-          )}
-        </div>
-
-        {deployError && (
-          <p className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2">
-            {deployError}
-          </p>
-        )}
-      </div>
-
-      {/* Deploy Result (fresh) */}
-      {deployResult && (
-        <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4">
-          <p className="text-sm text-emerald-400">
-            Successfully deployed to {deployResult.workerUrl}
-          </p>
-        </div>
-      )}
-
-      {/* Credentials & Connection Info (persistent) */}
-      {(() => {
-        const oauthPw = deployResult?.oauthPassword ?? data.credentials?.oauthPassword;
-        const bearer = deployResult?.bearerToken ?? data.credentials?.bearerToken;
-        const mode = deployResult?.authMode ?? data.deployment?.authMode ?? "bearer";
-        const workerUrl = deployResult?.workerUrl ?? data.deployment?.workerUrl;
-        const mcpUrl = deployResult?.mcpUrl ?? (workerUrl ? `${workerUrl}/mcp` : null);
-        const mcpUrlWithToken = deployResult?.mcpUrlWithToken ?? (bearer && workerUrl ? `${workerUrl}/mcp/t/${bearer}` : mcpUrl);
-
-        if (!isDeployed && !deployResult) return null;
-
-        return (
-          <div className="space-y-4">
-            {mode === "oauth" && oauthPw && (
-              <div className="border border-amber-500/30 bg-amber-500/5 rounded-xl p-4">
-                <p className="text-sm text-amber-300 mb-2">OAuth password</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 px-3 py-2 bg-gray-800 rounded-lg text-sm text-amber-200 break-all">
-                    {oauthPw}
-                  </code>
-                  <button
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(oauthPw);
-                      setPasswordCopied(true);
-                      setTimeout(() => setPasswordCopied(false), 2000);
-                    }}
-                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-300 transition-colors shrink-0"
                   >
-                    {passwordCopied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
+                    {testResults[field.key].success ? "✓" : "✗"}{" "}
+                    {testResults[field.key].message}
+                  </p>
+                )}
+                {validationErrors[field.key] && (
+                  <p className="text-xs mt-1.5 text-danger">
+                    {validationErrors[field.key]}
+                  </p>
+                )}
               </div>
-            )}
-
-            {mcpUrl && (
-              <div>
-                <h2 className="text-lg font-semibold mb-3">Connect to Claude</h2>
-                <ClaudeConfigSnippet
-                  mcpUrl={mcpUrl}
-                  mcpUrlWithToken={mcpUrlWithToken ?? mcpUrl}
-                  bearerToken={bearer}
-                  slug={slug}
-                  authMode={mode}
-                />
-              </div>
-            )}
+            ))}
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Secret Management (post-deploy) */}
       {isDeployed && (data.secrets ?? []).length > 0 && (
-        <div className="border border-gray-800 rounded-xl p-6 bg-gray-900/50">
+        <div className="border border-edge rounded-xl p-6 bg-surface/80">
           <h2 className="text-lg font-semibold mb-4">Update Secrets</h2>
-          <p className="text-sm text-gray-400 mb-4">
+          <p className="text-sm text-fg-muted mb-4">
             Update API keys without redeploying. Leave fields blank to keep
             existing values.
           </p>
@@ -699,6 +620,231 @@ export default function McpDetailPage({
           />
         </div>
       )}
+
+      {/* Deploy */}
+      <div className="border border-edge rounded-xl p-6 bg-surface/80">
+        <h2 className="text-lg font-semibold">
+          {isDeployed ? "Redeploy" : "Deploy"}
+        </h2>
+        <p className="text-sm text-fg-muted mt-1">
+          {isDeployed
+            ? "Redeploy with the latest bundle and configuration."
+            : "Deploy this MCP server to your Cloudflare Workers account."}
+        </p>
+
+        <div className="mt-5">
+          <label className="block text-sm font-medium text-fg-secondary mb-2">
+            Authentication
+          </label>
+          <div className="relative">
+            <select
+              value={authMode}
+              onChange={(e) =>
+                setAuthMode(e.target.value as "bearer" | "oauth" | "open")
+              }
+              className="w-full appearance-none px-4 py-2.5 pr-10 bg-surface-raised border border-edge-subtle rounded-lg text-sm text-fg focus:outline-none focus:border-accent-edge focus:ring-1 focus:ring-accent-edge"
+            >
+              <option value="bearer">Bearer token (default)</option>
+              <option value="oauth">OAuth 2.1 (password protected)</option>
+              <option value="open">Open (no authentication)</option>
+            </select>
+            <svg
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fg-muted"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+          {authMode === "oauth" && (
+            <p className="text-xs text-fg-faint mt-2">
+              OAuth requires a password prompt during authorization. Bearer tokens are not accepted.
+            </p>
+          )}
+          {authMode === "open" && (
+            <p className="text-xs text-danger mt-2">
+              Warning: Anyone with the URL can access this MCP.
+            </p>
+          )}
+        </div>
+
+        {isDeployed && authMode !== "open" && (
+          <div className="mt-4 pt-4 border-t border-edge">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={regenerateAuth}
+                  onChange={(e) => setRegenerateAuth(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-surface-overlay rounded-full peer-checked:bg-warning transition-colors" />
+                <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-surface-page shadow-sm rounded-full peer-checked:translate-x-4 transition-transform" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-fg-secondary group-hover:text-fg transition-colors">
+                  Regenerate {authMode === "oauth" ? "OAuth password" : "bearer token"}
+                </p>
+                <p className="text-xs text-fg-faint">
+                  Invalidates existing connections. Use if compromised.
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
+
+        <div className="mt-5 flex items-center justify-end gap-3">
+          <button
+            onClick={handleDeploy}
+            disabled={deploying || hasRequiredFieldsMissing}
+            className={`px-6 py-2.5 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              regenerateAuth && isDeployed
+                ? "bg-warning hover:bg-warning-hover"
+                : "bg-accent hover:bg-accent-hover"
+            }`}
+          >
+            {deploying
+              ? "Deploying..."
+              : regenerateAuth && isDeployed
+                ? "Regenerate & redeploy"
+                : isDeployed
+                  ? "Redeploy"
+                  : "Deploy to Cloudflare"}
+          </button>
+        </div>
+
+        {deployError && (
+          <p className="mt-4 text-sm text-danger bg-danger-mid/10 border border-danger-mid/20 rounded-lg px-4 py-2">
+            {deployError}
+          </p>
+        )}
+      </div>
+
+      {/* Deploy Result (fresh) */}
+      {deployResult && (
+        <div className="border border-success-mid/30 bg-success-mid/5 rounded-xl p-4">
+          <p className="text-sm text-success">
+            {regenerateSuccess && deployResult.authMode === "oauth"
+              ? "OAuth password regenerated. Update your client connections."
+              : regenerateSuccess
+                ? "Bearer token regenerated. Update your client connections."
+                : `Successfully deployed to ${deployResult.workerUrl}`}
+          </p>
+        </div>
+      )}
+
+      {/* Credentials & Connection Info (persistent) */}
+      {(() => {
+        const oauthPw = deployResult?.oauthPassword ?? data.credentials?.oauthPassword;
+        const bearer = deployResult?.bearerToken ?? data.credentials?.bearerToken ?? null;
+        const mode = deployResult?.authMode ?? data.deployment?.authMode ?? "bearer";
+        const workerUrl = deployResult?.workerUrl ?? data.deployment?.workerUrl;
+        const mcpUrl = deployResult?.mcpUrl ?? (workerUrl ? `${workerUrl}/mcp` : null);
+        const mcpUrlWithToken = deployResult?.mcpUrlWithToken ?? (bearer && workerUrl ? `${workerUrl}/mcp/t/${bearer}` : mcpUrl);
+
+        if (!isDeployed && !deployResult) return null;
+
+        return (
+          <div className="space-y-4">
+            {mcpUrl && (
+              <div className="border border-edge rounded-xl p-6 bg-surface/80">
+                <h2 className="text-lg font-semibold mb-3">Connect to Claude</h2>
+                <ClaudeConfigSnippet
+                  mcpUrl={mcpUrl}
+                  mcpUrlWithToken={mcpUrlWithToken ?? mcpUrl}
+                  bearerToken={bearer}
+                  slug={slug}
+                  authMode={mode}
+                  oauthPassword={oauthPw}
+                />
+              </div>
+            )}
+
+          </div>
+        );
+      })()}
+
+      {/* Danger Zone */}
+      <div className="border border-danger-mid/20 rounded-xl p-6 bg-danger-mid/5">
+        <h2 className="text-lg font-semibold text-danger mb-4">Danger Zone</h2>
+        <div className="space-y-4">
+          {isDeployed && (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-fg-secondary">Undeploy</p>
+                <p className="text-xs text-fg-faint mt-1">
+                  Take the worker offline. You can redeploy later.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!confirm("This will delete the deployed worker. You can redeploy later. Continue?")) return;
+                  setUndeploying(true);
+                  try {
+                    const res = await fetch(`/api/mcps/${slug}/undeploy`, {
+                      method: "DELETE",
+                    });
+                    if (res.ok) {
+                      const refreshed = await fetch(`/api/mcps/${slug}`).then((r) => r.json());
+                      setData(refreshed);
+                      setHealth(null);
+                      setDeployResult(null);
+                    } else {
+                      const result = await res.json();
+                      alert(result.error ?? "Failed to undeploy");
+                    }
+                  } catch {
+                    alert("Failed to connect to server");
+                  } finally {
+                    setUndeploying(false);
+                  }
+                }}
+                disabled={undeploying}
+                className="px-4 py-2 bg-danger-dark/50 hover:bg-danger-dark/70 border border-danger-strong/50 rounded-lg text-sm text-danger transition-colors shrink-0 disabled:opacity-50"
+              >
+                {undeploying ? "Undeploying..." : "Undeploy"}
+              </button>
+            </div>
+          )}
+          {isDeployed && (
+            <div className="border-t border-danger-mid/10" />
+          )}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-fg-secondary">Remove</p>
+              <p className="text-xs text-fg-faint mt-1">
+                Undeploy the worker and permanently remove this MCP from the dashboard.
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                if (!confirm("This will permanently remove this MCP from the dashboard. Continue?")) return;
+                setRemoving(true);
+                try {
+                  const res = await fetch(`/api/mcps/${slug}/remove`, {
+                    method: "DELETE",
+                  });
+                  if (res.ok) {
+                    router.push("/");
+                  } else {
+                    const result = await res.json();
+                    alert(result.error ?? "Failed to remove MCP");
+                  }
+                } catch {
+                  alert("Failed to connect to server");
+                } finally {
+                  setRemoving(false);
+                }
+              }}
+              disabled={removing}
+              className="px-4 py-2 bg-danger-dark/50 hover:bg-danger-dark/70 border border-danger-strong/50 rounded-lg text-sm text-danger transition-colors shrink-0 disabled:opacity-50"
+            >
+              {removing ? "Removing..." : "Remove"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

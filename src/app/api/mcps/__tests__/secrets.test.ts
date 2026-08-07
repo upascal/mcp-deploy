@@ -38,7 +38,7 @@ const mockResolved: ResolvedMcpEntry = {
   githubRepo: "owner/test-mcp-remote",
   name: "Test MCP",
   description: "A test MCP",
-  version: "v0.1.0",
+  version: "0.1.0",
   workerName: "test-mcp-worker",
   durableObjectBinding: "MCP_OBJ",
   durableObjectClassName: "TestMCP",

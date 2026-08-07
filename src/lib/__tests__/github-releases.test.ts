@@ -42,7 +42,7 @@ describe('fetchMcpMetadata', () => {
         const result = await fetchMcpMetadata('owner/repo');
 
         expect(result.metadata.name).toBe('Test MCP');
-        expect(result.version).toBe('v1.0.0');
+        expect(result.version).toBe('1.0.0');
         expect(result.bundleUrl).toBe('https://example.com/worker.mjs');
     });
 
@@ -94,7 +94,7 @@ describe('validateGitHubRepo', () => {
         expect(result.valid).toBe(true);
         expect(result.hasReleases).toBe(true);
         expect(result.hasMcpDeployJson).toBe(true);
-        expect(result.latestVersion).toBe('v1.0.0');
+        expect(result.latestVersion).toBe('1.0.0');
     });
 
     it('should detect missing metadata', async () => {

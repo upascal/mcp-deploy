@@ -1,5 +1,5 @@
 import type { McpRegistryEntry, ResolvedMcpEntry, StoredMcpEntry } from "./types";
-import { getMcps, addMcp, hasSeededDefaults, markSeededDefaults, getCachedMetadata, setCachedMetadata } from "./store";
+import { getMcps, addMcp, hasSeededDefaults, markSeededDefaults, getCachedMetadata, setCachedMetadata, getCachedMetadataForDisplay } from "./store";
 import { fetchMcpMetadata, getLatestVersion } from "./github-releases";
 
 /**
@@ -9,12 +9,12 @@ import { fetchMcpMetadata, getLatestVersion } from "./github-releases";
  */
 export const DEFAULT_MCPS: McpRegistryEntry[] = [
   {
-    slug: "zotero-assistant",
-    githubRepo: "upascal/zotero-assistant-mcp-remote",
+    slug: "zotero-assistant-mcp",
+    githubRepo: "upascal/zotero-assistant-mcp",
   },
   {
-    slug: "paper-search",
-    githubRepo: "upascal/paper-search-mcp-remote",
+    slug: "paper-search-mcp",
+    githubRepo: "upascal/paper-search-mcp",
   },
 ];
 
@@ -114,6 +114,43 @@ export async function resolveMcpEntry(
 }
 
 /**
+ * Resolve a stored MCP entry from cache only (no GitHub calls).
+ * Returns null if no cached metadata exists. Never hits the network.
+ */
+export function resolveMcpEntryFromCache(
+  entry: StoredMcpEntry
+): ResolvedMcpEntry | null {
+  const cached = getCachedMetadataForDisplay(entry.slug);
+  if (!cached) return null;
+
+  const { metadata, bundleUrl, version } = cached;
+
+  return {
+    slug: entry.slug,
+    githubRepo: entry.githubRepo,
+    releaseTag: entry.releaseTag,
+    isDefault: entry.isDefault,
+
+    name: metadata.name,
+    description: metadata.description,
+    version: version,
+
+    workerName: metadata.worker.name,
+    durableObjectBinding: metadata.worker.durableObjectBinding,
+    durableObjectClassName: metadata.worker.durableObjectClassName,
+    compatibilityDate: metadata.worker.compatibilityDate,
+    compatibilityFlags: metadata.worker.compatibilityFlags,
+    migrationTag: metadata.worker.migrationTag,
+
+    bundleUrl,
+
+    secrets: metadata.secrets,
+    config: metadata.config,
+    autoSecrets: metadata.autoSecrets,
+  };
+}
+
+/**
  * Get the bundle content for a resolved MCP entry.
  * Fetches from the GitHub release URL.
  */
@@ -129,11 +166,11 @@ export async function getBundleContent(
 
 /**
  * Check if an update is available for an MCP.
- * Compares the deployed version with the latest GitHub release.
+ * Compares the current local version (deployed or cached) with the latest GitHub release.
  */
 export async function checkForUpdate(
   entry: StoredMcpEntry,
-  deployedVersion: string | null
+  currentVersion: string | null
 ): Promise<{ updateAvailable: boolean; latestVersion: string | null }> {
   // If using a pinned version (not "latest"), no auto-update
   if (entry.releaseTag && entry.releaseTag !== "latest") {
@@ -142,12 +179,12 @@ export async function checkForUpdate(
 
   const latestVersion = await getLatestVersion(entry.githubRepo);
 
-  if (!latestVersion || !deployedVersion) {
+  if (!latestVersion || !currentVersion) {
     return { updateAvailable: false, latestVersion };
   }
 
   // Compare versions - update available if different
-  const updateAvailable = latestVersion !== deployedVersion;
+  const updateAvailable = latestVersion !== currentVersion;
 
   return { updateAvailable, latestVersion };
 }

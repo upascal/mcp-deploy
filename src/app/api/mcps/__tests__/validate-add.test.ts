@@ -9,6 +9,7 @@ vi.mock("@/lib/github-releases", () => ({
 vi.mock("@/lib/store", () => ({
   getMcps: vi.fn(),
   addMcp: vi.fn(),
+  setCachedMetadata: vi.fn(),
 }));
 
 import { GET as validateHandler } from "../../mcps/validate/route";
@@ -35,7 +36,7 @@ const mockMetadata = {
     autoSecrets: [],
   },
   bundleUrl: "https://github.com/owner/repo/releases/download/v0.1.0/worker.mjs",
-  version: "v0.1.0",
+  version: "0.1.0",
 };
 
 describe("GET /api/mcps/validate", () => {
@@ -55,7 +56,7 @@ describe("GET /api/mcps/validate", () => {
     expect(body.valid).toBe(true);
     expect(body.name).toBe("Test MCP");
     expect(body.slug).toBe("test-mcp-worker");
-    expect(body.version).toBe("v0.1.0");
+    expect(body.version).toBe("0.1.0");
   });
 
   it("should return 400 for missing repo param", async () => {

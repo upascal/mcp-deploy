@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  fetchMcpMetadata,
-  parseGitHubRepo,
-} from "@/lib/github-releases";
-import { addMcp, getMcps } from "@/lib/store";
+import { parseGitHubRepo } from "@/lib/github-releases";
+import { getMcps } from "@/lib/store";
 import { isValidReleaseTag, isValidSlug } from "@/lib/validation";
+import { addMcp } from "@/lib/operations";
 
 /**
  * Add a new MCP from a GitHub repository.
@@ -49,7 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse the repo input
+    // Validate repo format before calling operation
     const repo = parseGitHubRepo(repoInput);
     if (!repo) {
       return NextResponse.json(
@@ -58,54 +56,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if already added (fast check before any network calls)
-    const existing = getMcps();
-    if (existing.some((m) => m.githubRepo === repo)) {
-      return NextResponse.json(
-        { error: `Repository ${repo} is already added` },
-        { status: 409 }
-      );
+    // Pre-check: if a prevalidated slug was provided, check it doesn't conflict
+    if (prevalidatedSlug) {
+      const existing = getMcps();
+      if (existing.some((m) => m.slug === prevalidatedSlug)) {
+        return NextResponse.json(
+          { error: `MCP "${prevalidatedSlug}" is already added` },
+          { status: 409 }
+        );
+      }
     }
 
-    if (prevalidatedSlug && existing.some((m) => m.slug === prevalidatedSlug)) {
-      return NextResponse.json(
-        { error: `MCP "${prevalidatedSlug}" is already added` },
-        { status: 409 }
-      );
-    }
-
-    // Fetch metadata (single round-trip: release + metadata asset)
-    const { metadata, version } = await fetchMcpMetadata(repo, releaseTag);
-    const slug = metadata.worker.name;
-
-    // Double-check slug uniqueness (in case prevalidatedSlug wasn't provided)
-    if (!prevalidatedSlug && existing.some((m) => m.slug === slug)) {
-      return NextResponse.json(
-        { error: `"${metadata.name}" is already added` },
-        { status: 409 }
-      );
-    }
-
-    // Add to MCPs
-    addMcp({
-      slug,
-      githubRepo: repo,
-      releaseTag,
-      addedAt: new Date().toISOString(),
-    });
+    const result = await addMcp(repoInput, releaseTag);
 
     return NextResponse.json({
       success: true,
-      slug,
-      name: metadata.name,
-      version,
-      githubRepo: repo,
+      slug: result.slug,
+      name: result.name,
+      version: result.version,
+      githubRepo: result.githubRepo,
     });
   } catch (error) {
     console.error("Add MCP error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to add MCP" },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Failed to add MCP";
+
+    // Map known error messages to HTTP status codes
+    if (message.includes("is already added") || message.includes("already added")) {
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
+    if (message.includes("Invalid repository format")) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

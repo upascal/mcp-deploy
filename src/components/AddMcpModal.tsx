@@ -184,7 +184,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
               <button
                 onClick={validateRepo}
                 disabled={!repo.trim() || validating}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover disabled:bg-surface-raised disabled:text-fg-disabled text-white text-sm font-medium transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
               >
                 {validating ? "Checking..." : "Check Repository"}
               </button>
@@ -192,7 +192,7 @@ export function AddMcpModal({ open, onClose, onAdded }: Props) {
               <button
                 onClick={addMcp}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover disabled:bg-surface-raised disabled:text-fg-disabled text-white text-sm font-medium transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
               >
                 {loading ? "Adding..." : "Add MCP"}
               </button>

@@ -12,6 +12,7 @@ import {
   addMcp as storeAddMcp,
   getMcps,
   setCachedMetadata,
+  deleteCachedMetadata,
   getDeployment,
   setDeployment,
   setMcpSecrets,
@@ -19,6 +20,8 @@ import {
   removeMcp as storeRemoveMcp,
   undeployMcp as storeUndeployMcp,
   setLatestVersionCache,
+  getLatestVersionCache,
+  getCachedMetadataForDisplay,
 } from "./store";
 import {
   deployWorker,
@@ -105,6 +108,13 @@ export async function deployMcp(
     throw new Error(
       "Not logged in to Cloudflare. Run `npx wrangler login` first, or use the Settings page."
     );
+  }
+
+  // If an update is available, invalidate the metadata cache so we fetch the latest release
+  const latestVersionEntry = getLatestVersionCache(slug);
+  const cachedMeta = getCachedMetadataForDisplay(slug);
+  if (latestVersionEntry && cachedMeta && latestVersionEntry.latestVersion !== cachedMeta.version) {
+    deleteCachedMetadata(slug);
   }
 
   // Resolve the entry to get full metadata from GitHub

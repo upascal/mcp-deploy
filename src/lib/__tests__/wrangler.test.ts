@@ -21,6 +21,8 @@ import {
   ensureKVNamespace,
   deleteWorker,
   checkHealth,
+  _setWranglerCmd,
+  _setLoginCache,
 } from "../wrangler";
 import type { ResolvedMcpEntry } from "../types";
 
@@ -29,7 +31,7 @@ const mockEntry: ResolvedMcpEntry = {
   githubRepo: "owner/test-mcp-remote",
   name: "Test MCP",
   description: "A test MCP server",
-  version: "v0.1.0",
+  version: "0.1.0",
   workerName: "test-mcp-worker",
   durableObjectBinding: "MCP_OBJECT",
   durableObjectClassName: "MyMCP",
@@ -43,6 +45,10 @@ const mockEntry: ResolvedMcpEntry = {
 };
 
 describe("checkWranglerLogin", () => {
+  beforeEach(() => {
+    _setLoginCache(null);
+  });
+
   it("should detect logged in state", () => {
     vi.spyOn(child_process, "execSync").mockReturnValue(
       "You are logged in with an OAuth Token, associated with the email test@example.com" as any
@@ -201,6 +207,7 @@ describe("deployWorker", () => {
 describe("setSecrets", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _setWranglerCmd("wrangler");
   });
 
   it("should write secrets to temp file and pass to wrangler secret bulk", async () => {
@@ -262,6 +269,7 @@ describe("setSecrets", () => {
 describe("deleteSecret", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _setWranglerCmd("wrangler");
   });
 
   it("should call wrangler secret delete with --force", async () => {
@@ -302,6 +310,7 @@ describe("deleteSecret", () => {
 describe("ensureKVNamespace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _setWranglerCmd("wrangler");
   });
 
   it("should return existing namespace ID if found", async () => {
@@ -338,6 +347,7 @@ describe("ensureKVNamespace", () => {
 describe("deleteWorker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _setWranglerCmd("wrangler");
   });
 
   it("should call wrangler delete with --force", async () => {

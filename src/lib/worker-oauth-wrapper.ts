@@ -315,6 +315,54 @@ function consentPageHTML(params, resourceName, errorMsg, requirePassword) {
     '\\n</html>';
 }
 
+// ─── Success Interstitial Page ───
+
+function successPageHTML(redirectUrl) {
+  return '<!DOCTYPE html>' +
+    '\\n<html lang=\"en\">' +
+    '\\n<head>' +
+    '\\n  <meta charset=\"UTF-8\">' +
+    '\\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">' +
+    '\\n  <title>Authorized</title>' +
+    '\\n  <style>' +
+    '\\n    * { margin: 0; padding: 0; box-sizing: border-box; }' +
+    '\\n    body {' +
+    '\\n      font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;' +
+    '\\n      background: #0a0a0a; color: #e5e5e5;' +
+    '\\n      display: flex; justify-content: center; align-items: center;' +
+    '\\n      min-height: 100vh; padding: 20px;' +
+    '\\n    }' +
+    '\\n    .card {' +
+    '\\n      background: #171717; border: 1px solid #262626; border-radius: 12px;' +
+    '\\n      padding: 32px; max-width: 440px; width: 100%; text-align: center;' +
+    '\\n    }' +
+    '\\n    .check {' +
+    '\\n      width: 48px; height: 48px; margin: 0 auto 16px;' +
+    '\\n      background: #052e16; border-radius: 50%;' +
+    '\\n      display: flex; align-items: center; justify-content: center;' +
+    '\\n    }' +
+    '\\n    .check svg { width: 24px; height: 24px; color: #4ade80; }' +
+    '\\n    h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #fafafa; }' +
+    '\\n    .subtitle { color: #a3a3a3; font-size: 14px; }' +
+    '\\n  </style>' +
+    '\\n</head>' +
+    '\\n<body>' +
+    '\\n  <div class=\"card\">' +
+    '\\n    <div class=\"check\">' +
+    '\\n      <svg fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\">' +
+    '\\n        <path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M5 13l4 4L19 7\"/>' +
+    '\\n      </svg>' +
+    '\\n    </div>' +
+    '\\n    <h1>Authorized</h1>' +
+    '\\n    <p class=\"subtitle\">Redirecting back to the application\\u2026</p>' +
+    '\\n  </div>' +
+    '\\n  <script>' +
+    '\\n    setTimeout(function() { window.location.href = ' + JSON.stringify(redirectUrl) + '; }, 1500);' +
+    '\\n  </script>' +
+    '\\n</body>' +
+    '\\n</html>';
+}
+
 // ─── Main Worker ───
 
 export default {
@@ -509,9 +557,8 @@ export default {
         redirectUrl.searchParams.set('code', code);
         if (raw.state) redirectUrl.searchParams.set('state', raw.state);
 
-        return new Response(null, {
-          status: 302,
-          headers: { 'Location': redirectUrl.toString() }
+        return new Response(successPageHTML(redirectUrl.toString()), {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
         });
       } catch (err) {
         return new Response('Internal error: ' + err.message, { status: 500 });

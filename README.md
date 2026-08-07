@@ -12,18 +12,17 @@ A Next.js dashboard for deploying and managing MCP (Model Context Protocol) serv
 
 Requires [Node.js](https://nodejs.org/) 20+ and a [Cloudflare](https://cloudflare.com) account (free tier works).
 
+> **Note:** This package includes [better-sqlite3](https://github.com/WiseLibs/better-sqlite3), a native addon. Most systems work out of the box, but you may need Python 3 and a C++ compiler (Xcode CLI tools on macOS, `build-essential` on Ubuntu) if a prebuilt binary isn't available for your platform.
+
 ```bash
-git clone https://github.com/upascal/mcp-deploy.git
-cd mcp-deploy
-npm install
-npm link                # Makes `mcp-deploy` available as a global command
+npm install -g mcp-deploy
 ```
 
 Then log in to Cloudflare and start the web interface:
 
 ```bash
 mcp-deploy login        # Opens browser for Cloudflare OAuth
-mcp-deploy gui          # Start the web UI at http://localhost:3000
+mcp-deploy gui          # Start the web UI at http://localhost:3838
 ```
 
 Or use the CLI directly:
@@ -33,8 +32,6 @@ mcp-deploy add upascal/paper-search-mcp   # Add an MCP from GitHub
 mcp-deploy deploy paper-search-mcp         # Deploy to Cloudflare Workers
 mcp-deploy status paper-search-mcp         # Check deployment health
 ```
-
-> **npm package coming soon** — Once published, `npm install -g mcp-deploy` will replace the clone + link step.
 
 ## Features
 
@@ -64,7 +61,7 @@ mcp-deploy status paper-search-mcp         # Check deployment health
 
 ## Quick Start
 
-Open [http://localhost:3000](http://localhost:3000) after running `mcp-deploy gui`:
+Open [http://localhost:3838](http://localhost:3838) after running `mcp-deploy gui`:
 
 1. **Add an MCP** -- Paste a GitHub repo URL (must have releases with `mcp-deploy.json` + `worker.mjs`)
 2. **Configure** -- Enter any required secrets (API keys, tokens)
@@ -110,10 +107,10 @@ Open [http://localhost:3000](http://localhost:3000) after running `mcp-deploy gu
 
 ## CLI Usage
 
-All commands (after `npm link` during install):
+All commands:
 
 ```bash
-mcp-deploy gui [-p PORT]               # Start the web interface (default: 3000)
+mcp-deploy gui [-p PORT]               # Start the web interface (default: 3838)
 mcp-deploy list                        # List deployed MCPs
 mcp-deploy add <github-repo>           # Add an MCP from GitHub
 mcp-deploy remove <slug>               # Remove an MCP
@@ -256,12 +253,12 @@ For security vulnerabilities, please see [SECURITY.md](SECURITY.md) for responsi
 npm run dev          # Start dev server with hot reload (Turbopack)
 ```
 
-### Unlinking
+### Uninstalling
 
 To remove the global `mcp-deploy` command:
 
 ```bash
-npm unlink -g mcp-deploy
+npm uninstall -g mcp-deploy
 ```
 
 ### Running Tests

@@ -179,7 +179,7 @@ describe("mcp-registry", () => {
           autoSecrets: ["BEARER_TOKEN"],
         },
         bundleUrl: "https://github.com/owner/repo/releases/download/v0.1.0/worker.mjs",
-        version: "v0.1.0",
+        version: "0.1.0",
       };
 
       vi.mocked(fetchMcpMetadata).mockResolvedValue(mockMetadata);
@@ -195,7 +195,7 @@ describe("mcp-registry", () => {
 
       expect(resolved.name).toBe("Test MCP");
       expect(resolved.workerName).toBe("test-worker");
-      expect(resolved.version).toBe("v0.1.0");
+      expect(resolved.version).toBe("0.1.0");
       expect(resolved.secrets).toHaveLength(1);
       expect(resolved.secrets[0].key).toBe("API_KEY");
       expect(resolved.bundleUrl).toContain("worker.mjs");
@@ -220,7 +220,7 @@ describe("mcp-registry", () => {
           autoSecrets: [],
         },
         bundleUrl: "https://example.com/worker.mjs",
-        version: "v0.2.0",
+        version: "0.2.0",
       };
 
       vi.mocked(fetchMcpMetadata).mockResolvedValue(mockMetadata);
@@ -245,7 +245,7 @@ describe("mcp-registry", () => {
 
   describe("checkForUpdate", () => {
     it("should detect update available", async () => {
-      vi.mocked(getLatestVersion).mockResolvedValue("v0.2.0");
+      vi.mocked(getLatestVersion).mockResolvedValue("0.2.0");
 
       const result = await checkForUpdate(
         {
@@ -254,15 +254,15 @@ describe("mcp-registry", () => {
           releaseTag: "latest",
           addedAt: new Date().toISOString(),
         },
-        "v0.1.0"
+        "0.1.0"
       );
 
       expect(result.updateAvailable).toBe(true);
-      expect(result.latestVersion).toBe("v0.2.0");
+      expect(result.latestVersion).toBe("0.2.0");
     });
 
     it("should not detect update when versions match", async () => {
-      vi.mocked(getLatestVersion).mockResolvedValue("v0.1.0");
+      vi.mocked(getLatestVersion).mockResolvedValue("0.1.0");
 
       const result = await checkForUpdate(
         {
@@ -271,7 +271,7 @@ describe("mcp-registry", () => {
           releaseTag: "latest",
           addedAt: new Date().toISOString(),
         },
-        "v0.1.0"
+        "0.1.0"
       );
 
       expect(result.updateAvailable).toBe(false);
@@ -285,7 +285,7 @@ describe("mcp-registry", () => {
           releaseTag: "v0.1.0", // pinned
           addedAt: new Date().toISOString(),
         },
-        "v0.1.0"
+        "0.1.0"
       );
 
       expect(result.updateAvailable).toBe(false);
@@ -293,7 +293,7 @@ describe("mcp-registry", () => {
     });
 
     it("should handle null deployed version", async () => {
-      vi.mocked(getLatestVersion).mockResolvedValue("v0.1.0");
+      vi.mocked(getLatestVersion).mockResolvedValue("0.1.0");
 
       const result = await checkForUpdate(
         {

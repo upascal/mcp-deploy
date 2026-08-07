@@ -272,24 +272,10 @@ To add support for a new MCP server:
    ```typescript
    {
      slug: "my-mcp",
-     name: "My MCP Server",
-     description: "What this MCP does",
-     githubRepo: "owner/repo-name",
-     workerName: "my-mcp",
-     durableObjectClassName: "MyMCP",
-     secrets: [
-       {
-         key: "API_KEY",
-         label: "API Key",
-         type: "password",
-         required: true,
-         helpText: "Description of the API key",
-         helpUrl: "https://example.com/docs"
-       }
-     ],
-     config: []
+     githubRepo: "owner/my-mcp",
    }
    ```
+   All metadata (name, description, secrets, config) is read from the `mcp-deploy.json` in the GitHub release.
 
 2. **Ensure the MCP repo has**:
    - GitHub releases with `mcp-deploy.json` and `worker.mjs` assets

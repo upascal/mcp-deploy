@@ -13,19 +13,25 @@ export function StatusBadge({ status }: { status: string }) {
     not_deployed: "Not Deployed",
   };
 
+  const dot =
+    status === "deployed" ? (
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-30" />
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
+      </span>
+    ) : (
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${
+          status === "failed" ? "bg-danger" : "bg-fg-muted"
+        }`}
+      />
+    );
+
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[status] ?? styles.not_deployed}`}
     >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${
-          status === "deployed"
-            ? "bg-success"
-            : status === "failed"
-              ? "bg-danger"
-              : "bg-fg-muted"
-        }`}
-      />
+      {dot}
       {labels[status] ?? "Unknown"}
     </span>
   );

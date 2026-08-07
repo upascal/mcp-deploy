@@ -1,16 +1,16 @@
 import { getAllMcps, resolveMcpEntry } from "../lib/mcp-registry";
-import { getDeployment, getMcpSecrets, setMcpSecrets, removeMcp } from "../lib/store";
-import { fetchMcpMetadata, parseGitHubRepo } from "../lib/github-releases";
-import { addMcp, getMcps } from "../lib/store";
-import { checkWranglerLogin, wranglerLogin, deployWorker, setSecrets, deleteSecret, ensureKVNamespace } from "../lib/wrangler";
-import { generateBearerTokenWrapper } from "../lib/worker-bearer-wrapper";
-import { generateOAuthWrapper } from "../lib/worker-oauth-wrapper";
-import { generateOpenWrapper } from "../lib/worker-open-wrapper";
+import { getDeployment, getMcpSecrets, getMcps } from "../lib/store";
+import { checkWranglerLogin, wranglerLogin } from "../lib/wrangler";
 import { runTest } from "../lib/test-runner";
-import { decrypt, encrypt } from "../lib/encryption";
-import { randomBytes } from "crypto";
 import { input, password, select, checkbox, confirm } from "@inquirer/prompts";
 import type { ConfigField, SecretField } from "../lib/types";
+import {
+  addMcp,
+  deployMcp,
+  removeMcp,
+  undeployMcp,
+  updateSecrets,
+} from "../lib/operations";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -180,26 +180,9 @@ async function cmdAdd() {
   const repoInput = rest[0];
   if (!repoInput) die("Usage: mcp-deploy add <github-repo>");
 
-  const repo = parseGitHubRepo(repoInput);
-  if (!repo) die("Invalid repository format. Use owner/repo or a GitHub URL.");
-
-  console.log(`Checking ${repo}...`);
-  const { metadata, version } = await fetchMcpMetadata(repo);
-  const slug = metadata.worker.name;
-
-  const existing = await getMcps();
-  if (existing.some((m) => m.slug === slug || m.githubRepo === repo)) {
-    die(`"${metadata.name}" is already added`);
-  }
-
-  await addMcp({
-    slug,
-    githubRepo: repo,
-    releaseTag: "latest",
-    addedAt: new Date().toISOString(),
-  });
-
-  console.log(`Added "${metadata.name}" (${slug}) v${version}`);
+  console.log(`Checking ${repoInput}...`);
+  const result = await addMcp(repoInput);
+  console.log(`Added "${result.name}" (${result.slug}) v${result.version}`);
 }
 
 async function cmdRemove() {
@@ -218,7 +201,7 @@ async function cmdDeploy() {
   const slug = rest[0];
   if (!slug) die("Usage: mcp-deploy deploy <slug>");
 
-  // Check wrangler login
+  // Check wrangler login (interactive)
   const loginStatus = checkWranglerLogin();
   if (!loginStatus.loggedIn) {
     console.log("Not logged in to Cloudflare. Running wrangler login...");
@@ -233,22 +216,6 @@ async function cmdDeploy() {
   const defaultAuthMode: "bearer" | "oauth" | "open" =
     existingDeployment?.authMode ?? "bearer";
   const authMode: "bearer" | "oauth" | "open" = await promptAuthMode(defaultAuthMode);
-
-  let oauthPassword: string | null = null;
-  if (authMode === "oauth") {
-    if (process.env.OAUTH_PASSWORD?.trim()) {
-      oauthPassword = process.env.OAUTH_PASSWORD.trim();
-    } else if (existingDeployment?.oauthPassword) {
-      try {
-        oauthPassword = decrypt(existingDeployment.oauthPassword);
-      } catch {
-        oauthPassword = null;
-      }
-    }
-    if (!oauthPassword) {
-      oauthPassword = randomBytes(16).toString("hex");
-    }
-  }
 
   console.log(`Resolving ${entry.githubRepo}...`);
   const resolved = await resolveMcpEntry(entry);
@@ -288,6 +255,7 @@ async function cmdDeploy() {
     }
   }
 
+  // Merge for test purposes
   const mergedSecrets = {
     ...existingSecrets,
     ...secretValues,
@@ -314,87 +282,25 @@ async function cmdDeploy() {
     }
   }
 
-  // Generate bearer token
-  const bearerToken =
-    authMode === "open" ? null : randomBytes(32).toString("hex");
-  console.log(`\nFetching worker bundle...`);
-  const bundleResponse = await fetch(resolved.bundleUrl);
-  if (!bundleResponse.ok) die(`Failed to fetch bundle: ${bundleResponse.status}`);
-  const bundleCode = await bundleResponse.text();
+  console.log(`\nDeploying ${resolved.workerName}...`);
 
-  // Generate wrapper
-  let wrappedCode: string;
-  if (authMode === "oauth") {
-    wrappedCode = generateOAuthWrapper(
-      resolved.durableObjectClassName
-    );
-  } else if (authMode === "open") {
-    wrappedCode = generateOpenWrapper(resolved.durableObjectClassName);
-  } else {
-    wrappedCode = generateBearerTokenWrapper(
-      resolved.durableObjectClassName
-    );
-  }
-
-  // Deploy
-  console.log(`Deploying ${resolved.workerName}...`);
-  const kvNamespaceId =
-    authMode === "oauth"
-      ? await ensureKVNamespace("mcp-deploy-oauth")
-      : undefined;
-
-  const { url: workerUrl } = await deployWorker(
-    resolved,
-    bundleCode,
-    wrappedCode,
-    kvNamespaceId
-  );
-
-  // Set secrets
-  const allSecrets: Record<string, string> = {
-    ...mergedSecrets,
-    ...configValues,
-  };
-  if (bearerToken) {
-    allSecrets.BEARER_TOKEN = bearerToken;
-  }
-  if (authMode === "oauth") {
-    const jwtSecret = randomBytes(32).toString("hex");
-    allSecrets.OAUTH_JWT_SECRET = jwtSecret;
-    if (oauthPassword) {
-      allSecrets.OAUTH_PASSWORD = oauthPassword;
-    }
-  }
-  console.log("Setting secrets...");
-  await setSecrets(resolved.workerName, allSecrets);
-
-  // Store deployment
-  const { setDeployment } = await import("../lib/store");
-  await setDeployment({
-    slug,
-    status: "deployed",
-    workerUrl,
-    bearerToken: bearerToken ? encrypt(bearerToken) : null,
-    oauthPassword: oauthPassword ? encrypt(oauthPassword) : null,
+  const result = await deployMcp(slug, {
     authMode,
-    deployedAt: new Date().toISOString(),
-    version: resolved.version,
+    secrets: secretValues,
+    config: configValues,
   });
 
-  // Store secrets locally
-  await setMcpSecrets(slug, { ...mergedSecrets, ...configValues });
-
-  console.log(`\nDeployed to ${workerUrl}`);
-  console.log(`\nMCP URL: ${workerUrl}/mcp`);
-  if (authMode === "bearer" && bearerToken) {
-    console.log(`Bearer Token: ${bearerToken}`);
-    console.log(`MCP URL with Token: ${workerUrl}/mcp/t/${bearerToken}`);
+  console.log(`\nDeployed to ${result.workerUrl}`);
+  console.log(`\nMCP URL: ${result.mcpUrl}`);
+  if (authMode === "bearer" && result.bearerToken) {
+    console.log(`Bearer Token: ${result.bearerToken}`);
+    console.log(`MCP URL with Token: ${result.mcpUrlWithToken}`);
   }
 
   if (authMode === "oauth") {
     console.log("OAuth enabled (password required).");
-    if (oauthPassword) {
-      console.log(`OAuth password: ${oauthPassword}`);
+    if (result.oauthPassword) {
+      console.log(`OAuth password: ${result.oauthPassword}`);
     }
   }
 
@@ -404,19 +310,19 @@ async function cmdDeploy() {
 
   console.log(`\nClaude config snippet:`);
   const snippet =
-    authMode === "bearer" && bearerToken
+    authMode === "bearer" && result.bearerToken
       ? {
           mcpServers: {
             [slug]: {
               command: "npx",
               args: [
                 "mcp-remote",
-                `${workerUrl}/mcp`,
+                `${result.workerUrl}/mcp`,
                 "--header",
                 "Authorization:${AUTH_HEADER}",
               ],
               env: {
-                AUTH_HEADER: `Bearer ${bearerToken}`,
+                AUTH_HEADER: `Bearer ${result.bearerToken}`,
               },
             },
           },
@@ -425,7 +331,7 @@ async function cmdDeploy() {
           mcpServers: {
             [slug]: {
               command: "npx",
-              args: ["mcp-remote", `${workerUrl}/mcp`],
+              args: ["mcp-remote", `${result.workerUrl}/mcp`],
             },
           },
         };
@@ -452,6 +358,14 @@ async function cmdStatus() {
       console.log("Health: unreachable");
     }
   }
+}
+
+async function cmdUndeploy() {
+  const slug = rest[0];
+  if (!slug) die("Usage: mcp-deploy undeploy <slug>");
+
+  await undeployMcp(slug);
+  console.log(`Undeployed "${slug}". MCP remains in registry — redeploy with 'mcp-deploy deploy ${slug}'.`);
 }
 
 async function cmdSecretsList() {
@@ -482,19 +396,7 @@ async function cmdSecretsSet() {
   const value = await password({ message: `Enter value for ${key}: ` });
   if (!value.trim()) die("Value cannot be empty");
 
-  // Update on Cloudflare
-  const entries = await getMcps();
-  const entry = entries.find((m) => m.slug === slug);
-  if (!entry) die(`MCP "${slug}" not found`);
-
-  const resolved = await resolveMcpEntry(entry);
-  await setSecrets(resolved.workerName, { [key]: value.trim() });
-
-  // Update local store
-  const existing = await getMcpSecrets(slug) ?? {};
-  existing[key] = value.trim();
-  await setMcpSecrets(slug, existing);
-
+  await updateSecrets(slug, { [key]: value.trim() });
   console.log(`Secret "${key}" updated for ${slug}`);
 }
 
@@ -508,18 +410,7 @@ async function cmdSecretsDelete() {
     die(`"${slug}" is not deployed`);
   }
 
-  const entries = await getMcps();
-  const entry = entries.find((m) => m.slug === slug);
-  if (!entry) die(`MCP "${slug}" not found`);
-
-  const resolved = await resolveMcpEntry(entry);
-  await deleteSecret(resolved.workerName, key);
-
-  // Remove from local store
-  const existing = await getMcpSecrets(slug) ?? {};
-  delete existing[key];
-  await setMcpSecrets(slug, existing);
-
+  await updateSecrets(slug, {}, [key]);
   console.log(`Secret "${key}" deleted from ${slug}`);
 }
 
@@ -541,6 +432,7 @@ const commands: Record<string, () => Promise<void>> = {
   add: cmdAdd,
   remove: cmdRemove,
   deploy: cmdDeploy,
+  undeploy: cmdUndeploy,
   status: cmdStatus,
   "secrets:list": cmdSecretsList,
   "secrets:set": cmdSecretsSet,
