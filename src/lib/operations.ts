@@ -7,7 +7,7 @@ import {
   resolveMcpEntry,
   getBundleContent,
 } from "./mcp-registry";
-import { isCfConfigured } from "./cloudflare-config";
+import { getDeployService } from "./cloudflare-config";
 import {
   addMcp as storeAddMcp,
   getMcps,
@@ -23,13 +23,6 @@ import {
   getLatestVersionCache,
   getCachedMetadataForDisplay,
 } from "./store";
-import {
-  deployWorker,
-  setSecrets,
-  deleteSecret,
-  deleteWorker,
-  ensureKVNamespace,
-} from "./wrangler";
 import { decrypt, encrypt } from "./encryption";
 import { generateBearerTokenWrapper } from "./worker-bearer-wrapper";
 import { generateOAuthWrapper } from "./worker-oauth-wrapper";
@@ -102,13 +95,8 @@ export async function deployMcp(
     throw new Error("MCP not found");
   }
 
-  // Check wrangler is logged in
-  const configured = await isCfConfigured();
-  if (!configured) {
-    throw new Error(
-      "Not logged in to Cloudflare. Run `npx wrangler login` first, or use the Settings page."
-    );
-  }
+  // Throws with login guidance when no credentials are available.
+  const cf = await getDeployService();
 
   // If an update is available, invalidate the metadata cache so we fetch the latest release
   const latestVersionEntry = getLatestVersionCache(slug);
@@ -180,12 +168,17 @@ export async function deployMcp(
   // Deploy the worker via wrangler
   const kvNamespaceId =
     authMode === "oauth"
-      ? await ensureKVNamespace(OAUTH_KV_NAMESPACE)
+      ? await cf.ensureKVNamespace(OAUTH_KV_NAMESPACE)
       : undefined;
 
-  const { url } = await deployWorker(resolved, bundleContent, wrapper, kvNamespaceId);
+  const { url } = await cf.deployWorker(
+    resolved,
+    bundleContent,
+    wrapper,
+    kvNamespaceId
+  );
 
-  // Set all secrets on the worker via wrangler
+  // Set all secrets on the worker
   const allWorkerSecrets: Record<string, string> = {
     ...mergedSecrets,
     ...userConfig,
@@ -205,12 +198,12 @@ export async function deployMcp(
   }
 
   try {
-    await setSecrets(resolved.workerName, allWorkerSecrets);
+    await cf.setSecrets(resolved.workerName, allWorkerSecrets);
   } catch (secretsError) {
     // If setting secrets fails, clean up the deployed worker
     console.error("[deploy] Failed to set secrets, cleaning up worker:", secretsError);
     try {
-      await deleteWorker(resolved.workerName);
+      await cf.deleteWorker(resolved.workerName);
     } catch (deleteError) {
       console.error("[deploy] Failed to delete worker during cleanup:", deleteError);
     }
@@ -267,7 +260,8 @@ export async function undeployMcp(slug: string): Promise<void> {
     if (entry) {
       try {
         const resolved = await resolveMcpEntry(entry);
-        await deleteWorker(resolved.workerName);
+        const cf = await getDeployService();
+        await cf.deleteWorker(resolved.workerName);
       } catch (err) {
         console.warn(`[undeploy] Failed to delete worker for "${slug}":`, err);
       }
@@ -292,7 +286,8 @@ export async function removeMcp(slug: string): Promise<void> {
     if (entry) {
       try {
         const resolved = await resolveMcpEntry(entry);
-        await deleteWorker(resolved.workerName);
+        const cf = await getDeployService();
+        await cf.deleteWorker(resolved.workerName);
       } catch (err) {
         console.warn(`[remove] Failed to delete worker for "${slug}":`, err);
       }
@@ -318,20 +313,14 @@ export async function updateSecrets(
 
   const resolved = await resolveMcpEntry(entry);
 
-  const configured = await isCfConfigured();
-  if (!configured) {
-    throw new Error(
-      "Not logged in to Cloudflare. Run `npx wrangler login` first."
-    );
-  }
+  // Throws with login guidance when no credentials are available.
+  const cf = await getDeployService();
 
-  // Delete secrets via wrangler
   for (const key of deleteKeys) {
-    await deleteSecret(resolved.workerName, key);
+    await cf.deleteSecret(resolved.workerName, key);
   }
 
-  // Update secrets via wrangler
-  await setSecrets(resolved.workerName, secrets);
+  await cf.setSecrets(resolved.workerName, secrets);
 
   // Update stored secrets (merge with existing, remove deleted)
   const existing = getMcpSecrets(slug) ?? {};

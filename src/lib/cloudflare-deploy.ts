@@ -14,6 +14,9 @@ import Cloudflare from "cloudflare";
 import { randomBytes } from "crypto";
 import type { ResolvedMcpEntry } from "./types";
 
+/** Binding name the OAuth wrapper expects for its KV namespace. */
+const OAUTH_KV_BINDING = "OAUTH_KV";
+
 export class CloudflareDeployService {
   private client: Cloudflare;
   private accountId: string;
@@ -82,7 +85,8 @@ export class CloudflareDeployService {
   async deployWorker(
     entry: ResolvedMcpEntry,
     bundleContent: string,
-    wrapperContent: string
+    wrapperContent: string,
+    kvNamespaceId?: string
   ): Promise<{ url: string }> {
     const scriptName = entry.workerName;
 
@@ -100,6 +104,18 @@ export class CloudflareDeployService {
           name: entry.durableObjectBinding,
           class_name: entry.durableObjectClassName,
         },
+        // OAuth deploys need the KV namespace bound. The script-upload API
+        // spells this differently to wrangler.jsonc, which uses a top-level
+        // kv_namespaces array with an "id" field.
+        ...(kvNamespaceId
+          ? [
+              {
+                type: "kv_namespace",
+                name: OAUTH_KV_BINDING,
+                namespace_id: kvNamespaceId,
+              },
+            ]
+          : []),
       ],
     };
 

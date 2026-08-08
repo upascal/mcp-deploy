@@ -5,13 +5,13 @@ vi.mock("@/lib/mcp-registry", () => ({
   resolveMcpEntry: vi.fn(),
 }));
 
-vi.mock("@/lib/cloudflare-config", () => ({
-  isCfConfigured: vi.fn(),
-}));
-
-vi.mock("@/lib/wrangler", () => ({
+const mockCf = vi.hoisted(() => ({
   setSecrets: vi.fn(),
   deleteSecret: vi.fn(),
+}));
+
+vi.mock("@/lib/cloudflare-config", () => ({
+  getDeployService: vi.fn(),
 }));
 
 vi.mock("@/lib/store", () => ({
@@ -21,8 +21,7 @@ vi.mock("@/lib/store", () => ({
 
 import { GET as getSecretsHandler, PUT as putSecretsHandler } from "../../mcps/[slug]/secrets/route";
 import { getStoredMcp, resolveMcpEntry } from "@/lib/mcp-registry";
-import { isCfConfigured } from "@/lib/cloudflare-config";
-import { setSecrets, deleteSecret } from "@/lib/wrangler";
+import { getDeployService } from "@/lib/cloudflare-config";
 import { getMcpSecrets, setMcpSecrets } from "@/lib/store";
 import type { ResolvedMcpEntry } from "@/lib/types";
 
@@ -105,7 +104,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
     vi.clearAllMocks();
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
-    vi.mocked(isCfConfigured).mockResolvedValue(true);
+    vi.mocked(getDeployService).mockResolvedValue(mockCf as never);
     vi.mocked(getMcpSecrets).mockReturnValue({ EXISTING: "old-value" });
   });
 
@@ -123,7 +122,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.updatedKeys).toEqual(["API_KEY"]);
-    expect(setSecrets).toHaveBeenCalledWith("test-mcp-worker", { API_KEY: "new-key" });
+    expect(mockCf.setSecrets).toHaveBeenCalledWith("test-mcp-worker", { API_KEY: "new-key" });
   });
 
   it("should delete secrets from the worker", async () => {
@@ -139,7 +138,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
 
     expect(res.status).toBe(200);
     expect(body.deletedKeys).toEqual(["EXISTING"]);
-    expect(deleteSecret).toHaveBeenCalledWith("test-mcp-worker", "EXISTING");
+    expect(mockCf.deleteSecret).toHaveBeenCalledWith("test-mcp-worker", "EXISTING");
   });
 
   it("should merge updated secrets and remove deleted ones from store", async () => {
@@ -172,7 +171,11 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
   });
 
   it("should return 400 when not logged in", async () => {
-    vi.mocked(isCfConfigured).mockResolvedValue(false);
+    vi.mocked(getDeployService).mockRejectedValue(
+      new Error(
+        "Not logged in to Cloudflare. Run `npx wrangler login` first, or add an API token on the Settings page."
+      )
+    );
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
       method: "PUT",
@@ -242,7 +245,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
   });
 
   it("should handle wrangler setSecrets failure", async () => {
-    vi.mocked(setSecrets).mockRejectedValue(new Error("Wrangler error"));
+    mockCf.setSecrets.mockRejectedValue(new Error("Wrangler error"));
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
       method: "PUT",
@@ -257,7 +260,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
   });
 
   it("should handle wrangler deleteSecret failure", async () => {
-    vi.mocked(deleteSecret).mockRejectedValue(new Error("Delete failed"));
+    mockCf.deleteSecret.mockRejectedValue(new Error("Delete failed"));
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets", {
       method: "PUT",

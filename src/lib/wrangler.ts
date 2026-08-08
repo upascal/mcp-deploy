@@ -159,6 +159,28 @@ export function checkWranglerLogin(): {
 }
 
 /**
+ * Nudge wrangler into refreshing its stored OAuth token.
+ *
+ * Wrangler's access tokens last an hour, and it silently exchanges the stored
+ * refresh token on any command. Running the cheapest one keeps the local
+ * "just run `wrangler login`" experience without routing actual deploys
+ * through the CLI. Returns false if wrangler is unavailable or logged out.
+ */
+export function refreshWranglerAuth(): boolean {
+  invalidateLoginCache();
+  try {
+    execSync(wranglerExec("whoami"), {
+      encoding: "utf-8",
+      timeout: 60000,
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Run wrangler login (opens browser for OAuth).
  */
 export async function wranglerLogin(): Promise<{

@@ -5,8 +5,12 @@ vi.mock("@/lib/store", () => ({
   removeMcp: vi.fn(),
 }));
 
-vi.mock("@/lib/wrangler", () => ({
+const mockCf = vi.hoisted(() => ({
   deleteWorker: vi.fn(),
+}));
+
+vi.mock("@/lib/cloudflare-config", () => ({
+  getDeployService: vi.fn(),
 }));
 
 vi.mock("@/lib/mcp-registry", () => ({
@@ -21,7 +25,7 @@ vi.mock("@/lib/validation", () => ({
 import { NextRequest } from "next/server";
 import { DELETE as removeHandler } from "../[slug]/remove/route";
 import { getDeployment, removeMcp } from "@/lib/store";
-import { deleteWorker } from "@/lib/wrangler";
+import { getDeployService } from "@/lib/cloudflare-config";
 import { getStoredMcp, resolveMcpEntry } from "@/lib/mcp-registry";
 import type { ResolvedMcpEntry } from "@/lib/types";
 
@@ -59,6 +63,7 @@ function makeRequest() {
 describe("DELETE /api/mcps/[slug]/remove", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getDeployService).mockResolvedValue(mockCf as never);
   });
 
   it("should remove MCP successfully without deployment", async () => {
@@ -72,7 +77,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
     expect(removeMcp).toHaveBeenCalledWith("test-mcp");
-    expect(deleteWorker).not.toHaveBeenCalled();
+    expect(mockCf.deleteWorker).not.toHaveBeenCalled();
   });
 
   it("should remove MCP and delete worker if deployed", async () => {
@@ -88,7 +93,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
     });
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
-    vi.mocked(deleteWorker).mockResolvedValue();
+    mockCf.deleteWorker.mockResolvedValue(undefined);
 
     const res = await removeHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
@@ -97,7 +102,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
 
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
-    expect(deleteWorker).toHaveBeenCalledWith("test-mcp-worker");
+    expect(mockCf.deleteWorker).toHaveBeenCalledWith("test-mcp-worker");
     expect(removeMcp).toHaveBeenCalledWith("test-mcp");
   });
 
@@ -114,7 +119,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
     });
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
-    vi.mocked(deleteWorker).mockRejectedValue(new Error("Worker not found"));
+    mockCf.deleteWorker.mockRejectedValue(new Error("Worker not found"));
 
     const res = await removeHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
@@ -167,7 +172,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
 
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
-    expect(deleteWorker).not.toHaveBeenCalled();
+    expect(mockCf.deleteWorker).not.toHaveBeenCalled();
     expect(removeMcp).toHaveBeenCalledWith("test-mcp");
   });
 

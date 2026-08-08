@@ -6,15 +6,15 @@ vi.mock("@/lib/mcp-registry", () => ({
   getBundleContent: vi.fn(),
 }));
 
-vi.mock("@/lib/cloudflare-config", () => ({
-  isCfConfigured: vi.fn(),
-}));
-
-vi.mock("@/lib/wrangler", () => ({
+const mockCf = vi.hoisted(() => ({
   deployWorker: vi.fn(),
   setSecrets: vi.fn(),
   ensureKVNamespace: vi.fn(),
   deleteWorker: vi.fn(),
+}));
+
+vi.mock("@/lib/cloudflare-config", () => ({
+  getDeployService: vi.fn(),
 }));
 
 vi.mock("@/lib/store", () => ({
@@ -47,8 +47,7 @@ vi.mock("@/lib/worker-open-wrapper", () => ({
 
 import { POST as deployHandler } from "../../mcps/[slug]/deploy/route";
 import { getStoredMcp, resolveMcpEntry, getBundleContent } from "@/lib/mcp-registry";
-import { isCfConfigured } from "@/lib/cloudflare-config";
-import { deployWorker, setSecrets } from "@/lib/wrangler";
+import { getDeployService } from "@/lib/cloudflare-config";
 import { setDeployment, getMcpSecrets, getDeployment } from "@/lib/store";
 import type { ResolvedMcpEntry } from "@/lib/types";
 
@@ -89,10 +88,10 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(isCfConfigured).mockResolvedValue(true);
+    vi.mocked(getDeployService).mockResolvedValue(mockCf as never);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
     vi.mocked(getBundleContent).mockResolvedValue("// bundle code");
-    vi.mocked(deployWorker).mockResolvedValue({ url: "https://test-mcp-worker.user.workers.dev" });
+    mockCf.deployWorker.mockResolvedValue({ url: "https://test-mcp-worker.user.workers.dev" });
     vi.mocked(getMcpSecrets).mockReturnValue(null);
     vi.mocked(getDeployment).mockReturnValue(null);
   });
@@ -124,7 +123,11 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   });
 
   it("should return 400 when not logged in to Cloudflare", async () => {
-    vi.mocked(isCfConfigured).mockResolvedValue(false);
+    vi.mocked(getDeployService).mockRejectedValue(
+      new Error(
+        "Not logged in to Cloudflare. Run `npx wrangler login` first, or add an API token on the Settings page."
+      )
+    );
 
     const res = await deployHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
@@ -142,7 +145,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(setSecrets).toHaveBeenCalledWith(
+    expect(mockCf.setSecrets).toHaveBeenCalledWith(
       "test-mcp-worker",
       expect.objectContaining({ API_KEY: "my-key", BEARER_TOKEN: expect.any(String) })
     );
@@ -157,7 +160,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(setSecrets).toHaveBeenCalledWith(
+    expect(mockCf.setSecrets).toHaveBeenCalledWith(
       "test-mcp-worker",
       expect.objectContaining({
         OLD_KEY: "old-value",
@@ -183,7 +186,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   });
 
   it("should store failed deployment on error", async () => {
-    vi.mocked(deployWorker).mockRejectedValue(new Error("Deploy failed"));
+    mockCf.deployWorker.mockRejectedValue(new Error("Deploy failed"));
 
     const res = await deployHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
@@ -243,7 +246,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(setSecrets).toHaveBeenCalledWith(
+    expect(mockCf.setSecrets).toHaveBeenCalledWith(
       "test-mcp-worker",
       expect.objectContaining({ BEARER_TOKEN: expect.any(String) })
     );
@@ -273,7 +276,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   });
 
   it("should handle setSecrets errors", async () => {
-    vi.mocked(setSecrets).mockRejectedValue(new Error("Failed to set secrets"));
+    mockCf.setSecrets.mockRejectedValue(new Error("Failed to set secrets"));
 
     const res = await deployHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
