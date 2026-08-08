@@ -49,6 +49,32 @@ describe("getCredentials", () => {
     expect(await isCfConfigured()).toBe(false);
   });
 
+  it("prefers CLOUDFLARE_API_TOKEN over every other source", async () => {
+    // This is how the hosted app supplies the one account it owns.
+    vi.stubEnv("CLOUDFLARE_API_TOKEN", "env-token");
+    vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "env-acct");
+    mocks.getCfToken.mockReturnValue("stored-token");
+    mocks.readWranglerToken.mockReturnValue({ token: "wr", expired: false });
+
+    expect(await getCredentials()).toEqual({
+      apiToken: "env-token",
+      accountId: "env-acct",
+      source: "env",
+    });
+    expect(mocks.accountsList).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it("resolves the account for an env token without reusing the cache", async () => {
+    // The cached id may belong to a different token, so it must not be trusted.
+    vi.stubEnv("CLOUDFLARE_API_TOKEN", "env-token");
+    mocks.getCfAccountId.mockReturnValue("someone-elses-acct");
+    mocks.accountsList.mockResolvedValue({ result: [{ id: "real-acct" }] });
+
+    expect((await getCredentials())?.accountId).toBe("real-acct");
+    vi.unstubAllEnvs();
+  });
+
   it("prefers a stored API token over wrangler", async () => {
     mocks.getCfToken.mockReturnValue("api-token");
     mocks.readWranglerToken.mockReturnValue({ token: "wr", expired: false });
