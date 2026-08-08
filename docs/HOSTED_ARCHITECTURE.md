@@ -33,6 +33,11 @@ is easy and should not wait on the harder data-plane question.
 
 This matters, because the hosted design is much closer than it looks.
 
+> **Status update (2026-08-07): this section is now history — phase 1 is done.**
+> See §11 for what actually shipped. The two paragraphs below describe the
+> codebase as it was when this was written, and are kept because the reasoning
+> still explains *why* phase 1 looked the way it did.
+
 **The REST deploy path already exists and is not tied to a local machine.**
 `src/lib/cloudflare-deploy.ts` (`CloudflareDeployService`) does worker upload,
 bulk secrets, health checks, and deletion entirely over the Cloudflare REST API.
@@ -311,7 +316,7 @@ Each phase is independently shippable and useful on its own.
 
 | Phase | Work | Unblocks |
 |---|---|---|
-| **1** | Consolidate on `CloudflareDeployService`; retire the `wrangler` shell-out from the deploy path; feed real `cf_token` / `cf_account_id` from env | Anything hosted at all |
+| **1** ✅ | Consolidate on `CloudflareDeployService`; retire the `wrangler` shell-out from the deploy path; feed real `cf_token` / `cf_account_id` from env | Anything hosted at all |
 | **2** | Move storage off local SQLite to D1/Postgres; deploy the dashboard to a URL | Kills the install/update pain — **biggest win per unit of work** |
 | **3** | Add auth + `users` table; add `user_id` to `deployments` / `secrets` | Multi-user |
 | **4** | Namespace worker names per user; implement managed deployment target | Model B |
@@ -348,3 +353,47 @@ Two things to check before phase 4, neither blocking now:
   Cloudflare pricing — the numbers here are from the original draft.
 - If we ever pick up Model D, run the Durable Object namespace test in §3
   *first*. It is go/no-go for that path.
+
+## 11. Phase 1 as built — 2026-08-07
+
+Shipped. `operations.ts` now constructs a `CloudflareDeployService`, so deploys,
+secrets, KV and worker deletion all run over the REST API. `wrangler.ts` went
+from 562 lines to 196 and holds only login and token refresh.
+
+Four things the plan above did not anticipate:
+
+- **The routes had moved *off* `CloudflareDeployService`.** §2 said they used
+  it, which was true when written. An uncommitted refactor — invisible to git
+  because `core.ignoreStat` was set — had since routed them through
+  `operations.ts` onto the wrangler shell-out, leaving the REST service with
+  zero importers. Phase 1 was therefore less "consolidate" and more "point the
+  shared layer at the other backend". Keeping `operations.ts` as the shared
+  CLI/GUI seam was right; only its backend was wrong.
+
+- **The REST service had no KV support at all**, which OAuth deploys require.
+  Added `ensureKVNamespace`, plus a `kvNamespaceId` argument on `deployWorker` —
+  the script-upload API expresses KV bindings as
+  `{type: "kv_namespace", namespace_id}` inside `bindings`, not as the
+  top-level `kv_namespaces` array with an `id` field that wrangler.jsonc uses.
+
+- **Wrangler's OAuth token lasts one hour.** Reading it off disk alone would
+  have broken local deploys hourly. An expired token now triggers the cheapest
+  wrangler command so wrangler exchanges its refresh token, then re-reads. This
+  is why the shell-out survives for auth: `wrangler login` still works
+  unchanged for local users, and hosted deployments never take this path.
+
+- **`validateToken()` cannot resolve the account for an OAuth token.** It calls
+  `user.tokens.verify()`, which is API-token-only and answers
+  `401 Invalid API Token`. `accounts.list()` accepts both.
+
+Credentials now resolve in three tiers: `CLOUDFLARE_API_TOKEN` from the
+environment (how a hosted deployment supplies the single account it owns), then
+an encrypted token in `config`, then wrangler's OAuth token. Phase 4's
+`DeploymentTarget` slots in above this without disturbing it.
+
+One security note for whoever does phase 4: worker and secret names are
+interpolated into Cloudflare API paths, and worker names come from a third
+party's `mcp-deploy.json`. The wrangler path validated them against shell
+injection; the REST path needed the same validation against URL path
+injection. Both validators now live on `CloudflareDeployService`. Any new
+method that puts a caller-supplied name into a URL needs them too.
