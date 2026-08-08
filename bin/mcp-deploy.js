@@ -94,6 +94,9 @@ if (command === '-v' || command === '--version') {
                 ...process.env,
                 PORT: port,
                 HOSTNAME: host,
+                // The middleware rejects non-loopback Host headers to block DNS
+                // rebinding; binding to a real interface has to relax that.
+                ...(LOOPBACK.includes(host) ? {} : { MCP_DEPLOY_ALLOW_ANY_HOST: '1' }),
                 MCP_DEPLOY_ROOT: DATA_ROOT,
             },
         });

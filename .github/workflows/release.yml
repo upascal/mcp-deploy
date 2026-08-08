@@ -22,10 +22,6 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
 
-      # Trusted publishing requires npm >= 11.5.1; Node 22 ships 10.9.
-      - name: Upgrade npm
-        run: npm install -g npm@latest
-
       - name: Install
         run: npm ci
 
@@ -37,6 +33,12 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Trusted publishing requires npm >= 11.5.1; Node 22 ships 10.9. This has
+      # to come *after* npm ci: current npm blocks dependency install scripts by
+      # default, which stops better-sqlite3 fetching its prebuilt binary.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Publish to npm
         run: npm publish
