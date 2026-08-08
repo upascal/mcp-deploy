@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStoredMcp } from "@/lib/mcp-registry";
-import { checkHealth } from "@/lib/wrangler";
+import { checkWorkerHealth } from "@/lib/worker-health";
 import { getDeployment } from "@/lib/store";
 import { isValidSlug } from "@/lib/validation";
 
@@ -27,7 +27,7 @@ export async function GET(
       });
     }
 
-    const health = await checkHealth(deployment.workerUrl);
+    const health = await checkWorkerHealth(deployment.workerUrl);
 
     return NextResponse.json({
       slug,

@@ -8,8 +8,8 @@ vi.mock("@/lib/store", () => ({
   getDeployment: vi.fn(),
 }));
 
-vi.mock("@/lib/wrangler", () => ({
-  checkHealth: vi.fn(),
+vi.mock("@/lib/worker-health", () => ({
+  checkWorkerHealth: vi.fn(),
 }));
 
 vi.mock("@/lib/validation", () => ({
@@ -19,7 +19,7 @@ vi.mock("@/lib/validation", () => ({
 import { GET as statusHandler } from "../[slug]/status/route";
 import { getStoredMcp } from "@/lib/mcp-registry";
 import { getDeployment } from "@/lib/store";
-import { checkHealth } from "@/lib/wrangler";
+import { checkWorkerHealth } from "@/lib/worker-health";
 
 const mockEntry = {
   slug: "test-mcp",
@@ -52,7 +52,7 @@ describe("GET /api/mcps/[slug]/status", () => {
     expect(body.slug).toBe("test-mcp");
     expect(body.status).toBe("not_deployed");
     expect(body.healthy).toBe(false);
-    expect(checkHealth).not.toHaveBeenCalled();
+    expect(checkWorkerHealth).not.toHaveBeenCalled();
   });
 
   it("should return deployed status with health check", async () => {
@@ -67,7 +67,7 @@ describe("GET /api/mcps/[slug]/status", () => {
       deployedAt: "2024-01-01T00:00:00.000Z",
       version: "0.1.0",
     });
-    vi.mocked(checkHealth).mockResolvedValue({
+    vi.mocked(checkWorkerHealth).mockResolvedValue({
       healthy: true,
       status: 200,
     });
@@ -84,7 +84,7 @@ describe("GET /api/mcps/[slug]/status", () => {
     expect(body.workerUrl).toBe("https://test-mcp-worker.user.workers.dev");
     expect(body.deployedAt).toBe("2024-01-01T00:00:00.000Z");
     expect(body.healthy).toBe(true);
-    expect(checkHealth).toHaveBeenCalledWith("https://test-mcp-worker.user.workers.dev");
+    expect(checkWorkerHealth).toHaveBeenCalledWith("https://test-mcp-worker.user.workers.dev");
   });
 
   it("should return unhealthy status when health check fails", async () => {
@@ -99,7 +99,7 @@ describe("GET /api/mcps/[slug]/status", () => {
       deployedAt: "2024-01-01",
       version: "0.1.0",
     });
-    vi.mocked(checkHealth).mockResolvedValue({
+    vi.mocked(checkWorkerHealth).mockResolvedValue({
       healthy: false,
       status: 500,
       error: "Worker unavailable",
@@ -171,7 +171,7 @@ describe("GET /api/mcps/[slug]/status", () => {
     expect(res.status).toBe(200);
     expect(body.status).toBe("not_deployed");
     expect(body.healthy).toBe(false);
-    expect(checkHealth).not.toHaveBeenCalled();
+    expect(checkWorkerHealth).not.toHaveBeenCalled();
   });
 
   it("should return 500 on health check error", async () => {
@@ -186,7 +186,7 @@ describe("GET /api/mcps/[slug]/status", () => {
       deployedAt: "2024-01-01",
       version: "0.1.0",
     });
-    vi.mocked(checkHealth).mockRejectedValue(new Error("Network timeout"));
+    vi.mocked(checkWorkerHealth).mockRejectedValue(new Error("Network timeout"));
 
     const res = await statusHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),

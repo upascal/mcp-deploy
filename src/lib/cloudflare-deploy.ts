@@ -13,9 +13,32 @@
 import Cloudflare from "cloudflare";
 import { randomBytes } from "crypto";
 import type { ResolvedMcpEntry } from "./types";
+import { checkWorkerHealth, type WorkerHealth } from "./worker-health";
 
 /** Binding name the OAuth wrapper expects for its KV namespace. */
 const OAUTH_KV_BINDING = "OAUTH_KV";
+
+// Worker and secret names are interpolated into API paths, and worker names
+// come from a third party's mcp-deploy.json. Reject anything that could climb
+// out of the intended path rather than URL-encoding it into something odd.
+const WORKER_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const SECRET_NAME_RE = /^[a-zA-Z0-9_]+$/;
+
+function validateWorkerName(name: string): void {
+  if (!WORKER_NAME_RE.test(name)) {
+    throw new Error(
+      `Invalid worker name "${name}": must match ${WORKER_NAME_RE}`
+    );
+  }
+}
+
+function validateSecretName(name: string): void {
+  if (!SECRET_NAME_RE.test(name)) {
+    throw new Error(
+      `Invalid secret name "${name}": must match ${SECRET_NAME_RE}`
+    );
+  }
+}
 
 export class CloudflareDeployService {
   private client: Cloudflare;
@@ -89,6 +112,7 @@ export class CloudflareDeployService {
     kvNamespaceId?: string
   ): Promise<{ url: string }> {
     const scriptName = entry.workerName;
+    validateWorkerName(scriptName);
 
     // Check if the worker already exists (to decide whether to include migrations)
     const workerExists = await this.workerExists(scriptName);
@@ -185,7 +209,9 @@ export class CloudflareDeployService {
     workerName: string,
     secrets: Record<string, string>
   ): Promise<void> {
+    validateWorkerName(workerName);
     const filtered = Object.entries(secrets).filter(([, v]) => v);
+    filtered.forEach(([name]) => validateSecretName(name));
     if (filtered.length === 0) return;
 
     // Use the bulk secrets API
@@ -213,6 +239,8 @@ export class CloudflareDeployService {
    * Delete a single secret from a worker.
    */
   async deleteSecret(workerName: string, secretName: string): Promise<void> {
+    validateWorkerName(workerName);
+    validateSecretName(secretName);
     try {
       const response = await fetch(
         `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/scripts/${workerName}/secrets/${secretName}`,
@@ -238,21 +266,8 @@ export class CloudflareDeployService {
   /**
    * Check if a deployed worker is healthy.
    */
-  async checkHealth(
-    workerUrl: string
-  ): Promise<{ healthy: boolean; status?: number; error?: string }> {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-
-      const res = await fetch(workerUrl, { signal: controller.signal });
-      clearTimeout(timeout);
-
-      return { healthy: res.ok, status: res.status };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return { healthy: false, error: message };
-    }
+  async checkHealth(workerUrl: string): Promise<WorkerHealth> {
+    return checkWorkerHealth(workerUrl);
   }
 
   // ─── KV Namespaces ───
@@ -285,6 +300,7 @@ export class CloudflareDeployService {
    * Delete a worker from Cloudflare.
    */
   async deleteWorker(workerName: string): Promise<void> {
+    validateWorkerName(workerName);
     await this.client.workers.scripts.delete(workerName, {
       account_id: this.accountId,
     });
