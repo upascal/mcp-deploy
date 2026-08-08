@@ -28,21 +28,36 @@ if (command === '-v' || command === '--version') {
         process.exit(1);
     }
 
-    // Parse -p / --port flag
+    // Parse -p / --port and --host flags
     const guiArgs = args.slice(1);
     let port = '3838';
+    // Loopback by default: the dashboard has no authentication and can deploy
+    // and delete workers in the user's Cloudflare account, so it must not be
+    // reachable from the network unless someone explicitly asks for that.
+    let host = '127.0.0.1';
     for (let i = 0; i < guiArgs.length; i++) {
         if ((guiArgs[i] === '-p' || guiArgs[i] === '--port') && guiArgs[i + 1]) {
             port = guiArgs[i + 1];
-            break;
+        } else if ((guiArgs[i] === '-H' || guiArgs[i] === '--host') && guiArgs[i + 1]) {
+            host = guiArgs[i + 1];
         }
+    }
+
+    const LOOPBACK = ['127.0.0.1', 'localhost', '::1'];
+    if (!LOOPBACK.includes(host)) {
+        console.warn(
+            `\nWARNING: binding to ${host} exposes the dashboard to your network.\n` +
+            `It has no login, and anyone who reaches it can deploy or delete\n` +
+            `workers in your Cloudflare account and change their secrets.\n` +
+            `Only do this on a network you trust.\n`
+        );
     }
 
     const url = `http://localhost:${port}`;
     const portNum = parseInt(port, 10);
 
     // Cross-platform port check using Node's net module
-    checkPort(portNum).then((inUse) => {
+    checkPort(portNum, host).then((inUse) => {
         if (inUse) {
             // Something is on this port — check if it's a healthy mcp-deploy
             const http = require('http');
@@ -66,11 +81,11 @@ if (command === '-v' || command === '--version') {
                 process.exit(1);
             });
         } else {
-            startServer(port, url);
+            startServer(port, url, host);
         }
     });
 
-    function startServer(port, url) {
+    function startServer(port, url, host) {
         console.log(`Starting mcp-deploy web interface on ${url} ...`);
         const server = spawn(process.execPath, ['server.js'], {
             cwd: standaloneDir,
@@ -78,7 +93,7 @@ if (command === '-v' || command === '--version') {
             env: {
                 ...process.env,
                 PORT: port,
-                HOSTNAME: '0.0.0.0',
+                HOSTNAME: host,
                 MCP_DEPLOY_ROOT: DATA_ROOT,
             },
         });
@@ -112,7 +127,7 @@ if (command === '-v' || command === '--version') {
 mcp-deploy - Deploy MCP servers to Cloudflare Workers
 
 Usage:
-  mcp-deploy gui [-p PORT]                Start the web interface (default: 3838)
+  mcp-deploy gui [-p PORT] [-H HOST]      Start the web interface (default: 127.0.0.1:3838)
   mcp-deploy list                         List all MCPs and their status
   mcp-deploy add <github-repo>            Add an MCP from GitHub
   mcp-deploy remove <slug>                Remove an MCP (deletes worker + data)
@@ -129,6 +144,7 @@ Usage:
 Examples:
   mcp-deploy gui                          # Start web UI on http://localhost:3838
   mcp-deploy gui -p 3001                  # Start web UI on a different port
+  mcp-deploy gui -H 0.0.0.0               # Expose on the network (no auth — see warning)
   mcp-deploy add upascal/my-mcp-remote    # Add an MCP from GitHub
   mcp-deploy deploy my-mcp                # Deploy to Cloudflare Workers
   mcp-deploy undeploy my-mcp              # Take down worker, keep config for later
@@ -146,7 +162,7 @@ For more information, visit: https://github.com/upascal/mcp-deploy
  * Check if a port is in use (cross-platform, no lsof dependency).
  * Returns a promise that resolves to true if the port is occupied.
  */
-function checkPort(port) {
+function checkPort(port, host) {
     return new Promise((resolve) => {
         const server = net.createServer();
         server.once('error', (err) => {
@@ -159,6 +175,6 @@ function checkPort(port) {
         server.once('listening', () => {
             server.close(() => resolve(false));
         });
-        server.listen(port);
+        server.listen(port, host);
     });
 }
