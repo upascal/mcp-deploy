@@ -317,7 +317,7 @@ Each phase is independently shippable and useful on its own.
 | Phase | Work | Unblocks |
 |---|---|---|
 | **1** ✅ | Consolidate on `CloudflareDeployService`; retire the `wrangler` shell-out from the deploy path; feed real `cf_token` / `cf_account_id` from env | Anything hosted at all |
-| **2** | Move storage off local SQLite to D1/Postgres; deploy the dashboard to a URL | Kills the install/update pain — **biggest win per unit of work** |
+| **2** ◐ | Move storage off local SQLite to D1/Postgres; deploy the dashboard to a URL | Kills the install/update pain — **biggest win per unit of work** |
 | **3** | Add auth + `users` table; add `user_id` to `deployments` / `secrets` | Multi-user |
 | **4** | Namespace worker names per user; implement managed deployment target | Model B |
 | **5** | Per-user BYO-Cloudflare setting in Settings | Model C preserved |
@@ -397,3 +397,30 @@ party's `mcp-deploy.json`. The wrangler path validated them against shell
 injection; the REST path needed the same validation against URL path
 injection. Both validators now live on `CloudflareDeployService`. Any new
 method that puts a caller-supplied name into a URL needs them too.
+
+## 12. Phase 2 storage interface as built — 2026-08-09
+
+Half of phase 2 shipped: the storage seam. Everything mcp-deploy persists now
+goes through an async `Store` interface (`store-types.ts`). The local tool
+backs it with `SqliteStore` (`sqlite-store.ts`); a hosted deployment calls
+`setStore()` at startup to plug in D1 or Postgres, and `operations.ts` plus the
+route handlers run against it unchanged. `store.ts` is now a thin delegating
+facade over the active backend.
+
+Why async: D1 and Postgres are both async — and D1 is async even though it is
+SQLite underneath, which also makes it the lower-friction hosted backend
+(identical SQL dialect to the local `better-sqlite3`, so one query layer serves
+both). better-sqlite3 stays the local backend; no Node-version change, and
+swapping the local engine (e.g. `node:sqlite`) is still a separate decision.
+
+**Still open for phase 2:**
+
+- **`oauth/store.ts` is not yet behind the interface.** It still calls `getDb()`
+  directly and is synchronous. The OAuth clients/codes and JWT-secret storage it
+  owns must move behind the `Store` seam (or a sibling interface) before
+  OAuth-protected deploys can run in a hosted, non-SQLite environment. This is
+  the last hard binding to local SQLite in the deploy path.
+- **Deploy the dashboard to a URL.** Untouched. Note this cannot ship before the
+  dashboard has auth (phase 3) — see the CSRF/loopback work already done, which
+  protects the *local* dashboard but is not a substitute for real auth on a
+  public URL.
