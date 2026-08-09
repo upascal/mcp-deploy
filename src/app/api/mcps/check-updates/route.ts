@@ -24,8 +24,8 @@ export async function POST(request: NextRequest) {
     const results = await Promise.all(
       entries.map(async (entry) => {
         try {
-          const deployment = getDeployment(entry.slug);
-          const cached = getCachedMetadataForDisplay(entry.slug);
+          const deployment = await getDeployment(entry.slug);
+          const cached = await getCachedMetadataForDisplay(entry.slug);
           const currentVersion = deployment?.version ?? cached?.version ?? null;
           const { updateAvailable, latestVersion } = await checkForUpdate(
             entry,
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
           // Store in latest_version_cache
           if (latestVersion) {
-            setLatestVersionCache(entry.slug, latestVersion);
+            await setLatestVersionCache(entry.slug, latestVersion);
           }
 
           return {

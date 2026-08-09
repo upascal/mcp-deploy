@@ -25,7 +25,7 @@ export async function GET(
 
     // Try cache-only first (instant), fall back to GitHub for new MCPs
     const resolved =
-      resolveMcpEntryFromCache(entry) ??
+      (await resolveMcpEntryFromCache(entry)) ??
       (await resolveMcpEntry(entry));
 
     const [deployment, secrets] = await Promise.all([
@@ -37,7 +37,7 @@ export async function GET(
     const secretKeys = secrets ? Object.keys(secrets) : [];
 
     // Read update status from latest_version_cache (populated by explicit check)
-    const versionCache = getLatestVersionCache(slug);
+    const versionCache = await getLatestVersionCache(slug);
     const currentV = stripV(deployment?.version) ?? stripV(resolved.version);
     const latestV = stripV(versionCache?.latestVersion);
     const updateAvailable =

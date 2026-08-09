@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     // Pre-check: if a prevalidated slug was provided, check it doesn't conflict
     if (prevalidatedSlug) {
-      const existing = getMcps();
+      const existing = await getMcps();
       if (existing.some((m) => m.slug === prevalidatedSlug)) {
         return NextResponse.json(
           { error: `MCP "${prevalidatedSlug}" is already added` },

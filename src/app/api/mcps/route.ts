@@ -16,13 +16,13 @@ export async function GET() {
         try {
           // Try cache-only first (instant), fall back to GitHub for new MCPs
           const resolved =
-            resolveMcpEntryFromCache(entry) ??
+            (await resolveMcpEntryFromCache(entry)) ??
             (await resolveMcpEntry(entry));
 
-          const deployment = getDeployment(entry.slug);
+          const deployment = await getDeployment(entry.slug);
 
           // Read update status from latest_version_cache (populated by explicit check)
-          const versionCache = getLatestVersionCache(entry.slug);
+          const versionCache = await getLatestVersionCache(entry.slug);
           const currentV = stripV(deployment?.version) ?? stripV(resolved.version);
           const latestV = stripV(versionCache?.latestVersion);
           const updateAvailable =
@@ -47,7 +47,7 @@ export async function GET() {
         } catch (err) {
           // If we can't resolve, return minimal info with error
           console.error(`Failed to resolve MCP ${entry.slug}:`, err);
-          const deployment = getDeployment(entry.slug);
+          const deployment = await getDeployment(entry.slug);
           return {
             slug: entry.slug,
             name: entry.slug,

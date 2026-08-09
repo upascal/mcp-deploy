@@ -92,8 +92,8 @@ describe("POST /api/mcps/[slug]/deploy", () => {
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
     vi.mocked(getBundleContent).mockResolvedValue("// bundle code");
     mockCf.deployWorker.mockResolvedValue({ url: "https://test-mcp-worker.user.workers.dev" });
-    vi.mocked(getMcpSecrets).mockReturnValue(null);
-    vi.mocked(getDeployment).mockReturnValue(null);
+    vi.mocked(getMcpSecrets).mockResolvedValue(null);
+    vi.mocked(getDeployment).mockResolvedValue(null);
   });
 
   it("should deploy successfully", async () => {
@@ -152,7 +152,7 @@ describe("POST /api/mcps/[slug]/deploy", () => {
   });
 
   it("should merge with existing secrets on redeploy", async () => {
-    vi.mocked(getMcpSecrets).mockReturnValue({ OLD_KEY: "old-value" });
+    vi.mocked(getMcpSecrets).mockResolvedValue({ OLD_KEY: "old-value" });
 
     const res = await deployHandler(
       makeRequest({ secrets: { NEW_KEY: "new-value" } }),

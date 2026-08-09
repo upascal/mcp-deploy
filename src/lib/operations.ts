@@ -51,7 +51,7 @@ export async function addMcp(
   }
 
   // Check if already added
-  const existing = getMcps();
+  const existing = await getMcps();
   if (existing.some((m) => m.githubRepo === repo)) {
     throw new Error(`Repository ${repo} is already added`);
   }
@@ -66,7 +66,7 @@ export async function addMcp(
   }
 
   // Store
-  storeAddMcp({
+  await storeAddMcp({
     slug,
     githubRepo: repo,
     releaseTag,
@@ -74,7 +74,7 @@ export async function addMcp(
   });
 
   // Pre-populate metadata cache
-  setCachedMetadata(slug, { metadata, bundleUrl, version });
+  await setCachedMetadata(slug, { metadata, bundleUrl, version });
 
   return { slug, name: metadata.name, version, githubRepo: repo };
 }
@@ -99,23 +99,23 @@ export async function deployMcp(
   const cf = await getDeployService();
 
   // If an update is available, invalidate the metadata cache so we fetch the latest release
-  const latestVersionEntry = getLatestVersionCache(slug);
-  const cachedMeta = getCachedMetadataForDisplay(slug);
+  const latestVersionEntry = await getLatestVersionCache(slug);
+  const cachedMeta = await getCachedMetadataForDisplay(slug);
   if (latestVersionEntry && cachedMeta && latestVersionEntry.latestVersion !== cachedMeta.version) {
-    deleteCachedMetadata(slug);
+    await deleteCachedMetadata(slug);
   }
 
   // Resolve the entry to get full metadata from GitHub
   const resolved = await resolveMcpEntry(entry);
 
   // Merge with any existing secrets (so we don't lose them on redeploy)
-  const existingSecrets = getMcpSecrets(slug) ?? {};
+  const existingSecrets = (await getMcpSecrets(slug)) ?? {};
   const mergedSecrets: Record<string, string> = {
     ...existingSecrets,
     ...userSecrets,
   };
 
-  const existingDeployment = getDeployment(slug);
+  const existingDeployment = await getDeployment(slug);
   const regenerateOAuthPassword = options.regenerateOAuthPassword === true;
   let oauthPassword: string | null = null;
   if (authMode === "oauth") {
@@ -215,7 +215,7 @@ export async function deployMcp(
   const mcpUrlWithToken = bearerToken ? `${url}/mcp/t/${bearerToken}` : mcpUrl;
 
   // Store deployment record
-  setDeployment({
+  await setDeployment({
     slug,
     status: "deployed",
     workerUrl: url,
@@ -227,10 +227,10 @@ export async function deployMcp(
   });
 
   // Store user secrets (not auto-generated ones)
-  setMcpSecrets(slug, { ...mergedSecrets, ...userConfig });
+  await setMcpSecrets(slug, { ...mergedSecrets, ...userConfig });
 
   // Update latest version cache so "update available" badge clears
-  setLatestVersionCache(slug, resolved.version);
+  await setLatestVersionCache(slug, resolved.version);
 
   return {
     workerUrl: url,
@@ -249,7 +249,7 @@ export async function deployMcp(
  * Extracted from DELETE /api/mcps/[slug]/undeploy route handler.
  */
 export async function undeployMcp(slug: string): Promise<void> {
-  const deployment = getDeployment(slug);
+  const deployment = await getDeployment(slug);
   if (!deployment || deployment.status !== "deployed") {
     throw new Error("MCP is not deployed");
   }
@@ -269,7 +269,7 @@ export async function undeployMcp(slug: string): Promise<void> {
   }
 
   // Update deployment record — keep it but mark as not_deployed
-  storeUndeployMcp(slug);
+  await storeUndeployMcp(slug);
 }
 
 /**
@@ -278,7 +278,7 @@ export async function undeployMcp(slug: string): Promise<void> {
  * Extracted from DELETE /api/mcps/[slug]/remove route handler.
  */
 export async function removeMcp(slug: string): Promise<void> {
-  const deployment = getDeployment(slug);
+  const deployment = await getDeployment(slug);
 
   // Best-effort: delete the Cloudflare worker if deployed
   if (deployment?.workerUrl) {
@@ -294,7 +294,7 @@ export async function removeMcp(slug: string): Promise<void> {
     }
   }
 
-  storeRemoveMcp(slug);
+  await storeRemoveMcp(slug);
 }
 
 /**
@@ -323,12 +323,12 @@ export async function updateSecrets(
   await cf.setSecrets(resolved.workerName, secrets);
 
   // Update stored secrets (merge with existing, remove deleted)
-  const existing = getMcpSecrets(slug) ?? {};
+  const existing = (await getMcpSecrets(slug)) ?? {};
   const merged = { ...existing, ...secrets };
   for (const key of deleteKeys) {
     delete merged[key];
   }
-  setMcpSecrets(slug, merged);
+  await setMcpSecrets(slug, merged);
 
   return {
     updatedKeys: Object.keys(secrets),

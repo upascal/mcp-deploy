@@ -88,7 +88,7 @@ export async function POST(
 
     // Store failed deployment
     try {
-      setDeployment({
+      await setDeployment({
         slug,
         status: "failed",
         workerUrl: null,

@@ -34,8 +34,8 @@ export interface CloudflareCredentials {
  * Tokens saved before encryption was added are plaintext. Decrypt only when
  * the value has the "iv:tag:ciphertext" shape written by encrypt().
  */
-function readStoredToken(): string | null {
-  const raw = getStoredToken();
+async function readStoredToken(): Promise<string | null> {
+  const raw = await getStoredToken();
   if (!raw) return null;
   if (raw.split(":").length !== 3) return raw;
 
@@ -56,7 +56,7 @@ async function resolveAccountId(
 ): Promise<string | null> {
   // The cache is not keyed by token, so a token from a different source could
   // otherwise inherit an account id belonging to another one.
-  const cached = useCache ? getStoredAccountId() : null;
+  const cached = useCache ? await getStoredAccountId() : null;
   if (cached) return cached;
 
   try {
@@ -69,7 +69,7 @@ async function resolveAccountId(
     const id = accounts.result?.[0]?.id;
     if (!id) return null;
 
-    setStoredAccountId(id);
+    await setStoredAccountId(id);
     return id;
   } catch {
     return null;
@@ -93,7 +93,7 @@ export async function getCredentials(): Promise<CloudflareCredentials | null> {
     }
   }
 
-  const storedToken = readStoredToken();
+  const storedToken = await readStoredToken();
   if (storedToken) {
     const accountId = await resolveAccountId(storedToken);
     if (accountId) {

@@ -18,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: "MCP not found" }, { status: 404 });
     }
 
-    const deployment = getDeployment(slug);
+    const deployment = await getDeployment(slug);
     if (!deployment?.workerUrl) {
       return NextResponse.json({
         slug,

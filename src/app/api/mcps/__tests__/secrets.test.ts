@@ -61,7 +61,7 @@ describe("GET /api/mcps/[slug]/secrets", () => {
   });
 
   it("should return secret schema and configured keys", async () => {
-    vi.mocked(getMcpSecrets).mockReturnValue({ API_KEY: "encrypted-value" });
+    vi.mocked(getMcpSecrets).mockResolvedValue({ API_KEY: "encrypted-value" });
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets");
     const res = await getSecretsHandler(req, {
@@ -76,7 +76,7 @@ describe("GET /api/mcps/[slug]/secrets", () => {
   });
 
   it("should return empty configuredKeys when no secrets set", async () => {
-    vi.mocked(getMcpSecrets).mockReturnValue(null);
+    vi.mocked(getMcpSecrets).mockResolvedValue(null);
 
     const req = new Request("http://localhost:3000/api/mcps/test-mcp/secrets");
     const res = await getSecretsHandler(req, {
@@ -105,7 +105,7 @@ describe("PUT /api/mcps/[slug]/secrets", () => {
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
     vi.mocked(resolveMcpEntry).mockResolvedValue(mockResolved);
     vi.mocked(getDeployService).mockResolvedValue(mockCf as never);
-    vi.mocked(getMcpSecrets).mockReturnValue({ EXISTING: "old-value" });
+    vi.mocked(getMcpSecrets).mockResolvedValue({ EXISTING: "old-value" });
   });
 
   it("should update secrets on the worker", async () => {

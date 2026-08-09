@@ -67,7 +67,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
   });
 
   it("should remove MCP successfully without deployment", async () => {
-    vi.mocked(getDeployment).mockReturnValue(null);
+    vi.mocked(getDeployment).mockResolvedValue(null);
 
     const res = await removeHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
@@ -81,7 +81,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
   });
 
   it("should remove MCP and delete worker if deployed", async () => {
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "deployed",
       workerUrl: "https://test-mcp-worker.user.workers.dev",
@@ -107,7 +107,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
   });
 
   it("should continue removal if worker deletion fails", async () => {
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "deployed",
       workerUrl: "https://test-mcp-worker.user.workers.dev",
@@ -153,7 +153,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
   });
 
   it("should handle missing entry gracefully", async () => {
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "deployed",
       workerUrl: "https://test-mcp-worker.user.workers.dev",
@@ -177,7 +177,7 @@ describe("DELETE /api/mcps/[slug]/remove", () => {
   });
 
   it("should handle resolution errors gracefully", async () => {
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "deployed",
       workerUrl: "https://test-mcp-worker.user.workers.dev",

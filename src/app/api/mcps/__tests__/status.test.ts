@@ -41,7 +41,7 @@ describe("GET /api/mcps/[slug]/status", () => {
 
   it("should return not_deployed status for undeployed MCP", async () => {
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(getDeployment).mockReturnValue(null);
+    vi.mocked(getDeployment).mockResolvedValue(null);
 
     const res = await statusHandler(makeRequest(), {
       params: Promise.resolve({ slug: "test-mcp" }),
@@ -57,7 +57,7 @@ describe("GET /api/mcps/[slug]/status", () => {
 
   it("should return deployed status with health check", async () => {
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "deployed",
       workerUrl: "https://test-mcp-worker.user.workers.dev",
@@ -89,7 +89,7 @@ describe("GET /api/mcps/[slug]/status", () => {
 
   it("should return unhealthy status when health check fails", async () => {
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "deployed",
       workerUrl: "https://test-mcp-worker.user.workers.dev",
@@ -152,7 +152,7 @@ describe("GET /api/mcps/[slug]/status", () => {
 
   it("should return not_deployed when deployment exists but has no workerUrl", async () => {
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "failed",
       workerUrl: null,
@@ -176,7 +176,7 @@ describe("GET /api/mcps/[slug]/status", () => {
 
   it("should return 500 on health check error", async () => {
     vi.mocked(getStoredMcp).mockResolvedValue(mockEntry);
-    vi.mocked(getDeployment).mockReturnValue({
+    vi.mocked(getDeployment).mockResolvedValue({
       slug: "test-mcp",
       status: "deployed",
       workerUrl: "https://test-mcp-worker.user.workers.dev",

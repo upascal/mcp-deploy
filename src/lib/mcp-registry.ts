@@ -23,13 +23,13 @@ export const DEFAULT_MCPS: McpRegistryEntry[] = [
  * Call this on app startup or when fetching the MCP list.
  */
 export async function seedDefaultsIfNeeded(): Promise<void> {
-  const alreadySeeded = hasSeededDefaults();
+  const alreadySeeded = await hasSeededDefaults();
   if (alreadySeeded) return;
 
   // Add each default MCP
   for (const mcp of DEFAULT_MCPS) {
     try {
-      addMcp({
+      await addMcp({
         slug: mcp.slug,
         githubRepo: mcp.githubRepo,
         releaseTag: mcp.releaseTag ?? "latest",
@@ -42,7 +42,7 @@ export async function seedDefaultsIfNeeded(): Promise<void> {
     }
   }
 
-  markSeededDefaults();
+  await markSeededDefaults();
 }
 
 /**
@@ -51,7 +51,7 @@ export async function seedDefaultsIfNeeded(): Promise<void> {
  */
 export async function getAllMcps(): Promise<StoredMcpEntry[]> {
   await seedDefaultsIfNeeded();
-  return getMcps();
+  return await getMcps();
 }
 
 /**
@@ -72,7 +72,7 @@ export async function resolveMcpEntry(
   entry: StoredMcpEntry
 ): Promise<ResolvedMcpEntry> {
   // Check cache first
-  let cached = getCachedMetadata(entry.slug);
+  let cached = await getCachedMetadata(entry.slug);
   if (!cached) {
     const fresh = await fetchMcpMetadata(
       entry.githubRepo,
@@ -83,7 +83,7 @@ export async function resolveMcpEntry(
       bundleUrl: fresh.bundleUrl,
       version: fresh.version,
     };
-    setCachedMetadata(entry.slug, cached);
+    await setCachedMetadata(entry.slug, cached);
   }
 
   const { metadata, bundleUrl, version } = cached;
@@ -117,10 +117,10 @@ export async function resolveMcpEntry(
  * Resolve a stored MCP entry from cache only (no GitHub calls).
  * Returns null if no cached metadata exists. Never hits the network.
  */
-export function resolveMcpEntryFromCache(
+export async function resolveMcpEntryFromCache(
   entry: StoredMcpEntry
-): ResolvedMcpEntry | null {
-  const cached = getCachedMetadataForDisplay(entry.slug);
+): Promise<ResolvedMcpEntry | null> {
+  const cached = await getCachedMetadataForDisplay(entry.slug);
   if (!cached) return null;
 
   const { metadata, bundleUrl, version } = cached;

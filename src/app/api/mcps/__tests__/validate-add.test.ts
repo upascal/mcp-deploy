@@ -129,7 +129,7 @@ describe("GET /api/mcps/validate", () => {
 describe("POST /api/mcps/add", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getMcps).mockReturnValue([]);
+    vi.mocked(getMcps).mockResolvedValue([]);
   });
 
   it("should add a new MCP", async () => {
@@ -164,7 +164,7 @@ describe("POST /api/mcps/add", () => {
 
   it("should return 409 for duplicate repo", async () => {
     vi.mocked(parseGitHubRepo).mockReturnValue("owner/test-mcp-remote");
-    vi.mocked(getMcps).mockReturnValue([
+    vi.mocked(getMcps).mockResolvedValue([
       {
         slug: "existing",
         githubRepo: "owner/test-mcp-remote",
@@ -186,7 +186,7 @@ describe("POST /api/mcps/add", () => {
 
   it("should return 409 for duplicate prevalidated slug", async () => {
     vi.mocked(parseGitHubRepo).mockReturnValue("owner/new-repo");
-    vi.mocked(getMcps).mockReturnValue([
+    vi.mocked(getMcps).mockResolvedValue([
       {
         slug: "test-mcp-worker",
         githubRepo: "owner/other-repo",

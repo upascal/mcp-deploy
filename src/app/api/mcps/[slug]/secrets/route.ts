@@ -22,7 +22,7 @@ export async function GET(
     }
 
     const resolved = await resolveMcpEntry(entry);
-    const secrets = getMcpSecrets(slug);
+    const secrets = await getMcpSecrets(slug);
     const configuredKeys = secrets ? Object.keys(secrets) : [];
 
     return NextResponse.json({
