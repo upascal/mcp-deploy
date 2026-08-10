@@ -413,14 +413,19 @@ SQLite underneath, which also makes it the lower-friction hosted backend
 both). better-sqlite3 stays the local backend; no Node-version change, and
 swapping the local engine (e.g. `node:sqlite`) is still a separate decision.
 
+**Storage abstraction is now complete.** As of 2026-08-09, `oauth/store.ts` is
+also behind the seam — its ten functions (OAuth clients/codes, JWT secrets, the
+worker-URL → slug mapping) folded into the same `Store` because `removeMcp`
+already touched those tables. `db.ts` now has exactly one importer,
+`SqliteStore`, so the entire local backend is encapsulated. A hosted deployment
+swaps everything with a single `setStore()` call at startup.
+
 **Still open for phase 2:**
 
-- **`oauth/store.ts` is not yet behind the interface.** It still calls `getDb()`
-  directly and is synchronous. The OAuth clients/codes and JWT-secret storage it
-  owns must move behind the `Store` seam (or a sibling interface) before
-  OAuth-protected deploys can run in a hosted, non-SQLite environment. This is
-  the last hard binding to local SQLite in the deploy path.
-- **Deploy the dashboard to a URL.** Untouched. Note this cannot ship before the
-  dashboard has auth (phase 3) — see the CSRF/loopback work already done, which
-  protects the *local* dashboard but is not a substitute for real auth on a
-  public URL.
+- **Deploy the dashboard to a URL.** Untouched, and the last piece. Note this
+  cannot ship before the dashboard has auth (phase 3) — the CSRF/loopback work
+  already done protects the *local* dashboard but is not a substitute for real
+  auth on a public URL. So the practical order is: build the D1/Postgres `Store`
+  implementation in the private repo → add auth (phase 3) → then expose a URL.
+  The public repo's storage seam is ready for that D1/Postgres implementation to
+  drop in.
