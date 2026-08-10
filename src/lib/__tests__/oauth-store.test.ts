@@ -87,8 +87,8 @@ describe("OAuth client store", () => {
   });
 
   it("should store and retrieve a client", async () => {
-    storeOAuthClient(mockClient);
-    const retrieved = getOAuthClient("test-client-123");
+    await storeOAuthClient(mockClient);
+    const retrieved = await getOAuthClient("test-client-123");
     expect(retrieved).not.toBeNull();
     expect(retrieved!.client_id).toBe("test-client-123");
     expect(retrieved!.client_name).toBe("Test Client");
@@ -96,21 +96,21 @@ describe("OAuth client store", () => {
   });
 
   it("should return null for non-existent client", async () => {
-    const result = getOAuthClient("non-existent");
+    const result = await getOAuthClient("non-existent");
     expect(result).toBeNull();
   });
 
   it("should delete a client", async () => {
-    storeOAuthClient(mockClient);
-    deleteOAuthClient("test-client-123");
-    const result = getOAuthClient("test-client-123");
+    await storeOAuthClient(mockClient);
+    await deleteOAuthClient("test-client-123");
+    const result = await getOAuthClient("test-client-123");
     expect(result).toBeNull();
   });
 
   it("should overwrite client on re-store", async () => {
-    storeOAuthClient(mockClient);
-    storeOAuthClient({ ...mockClient, client_name: "Updated Client" });
-    const retrieved = getOAuthClient("test-client-123");
+    await storeOAuthClient(mockClient);
+    await storeOAuthClient({ ...mockClient, client_name: "Updated Client" });
+    const retrieved = await getOAuthClient("test-client-123");
     expect(retrieved!.client_name).toBe("Updated Client");
   });
 });
@@ -121,22 +121,22 @@ describe("Authorization code store", () => {
   });
 
   it("should store and retrieve an auth code", async () => {
-    storeAuthCode(mockAuthCode);
-    const retrieved = getAuthCode("auth-code-abc");
+    await storeAuthCode(mockAuthCode);
+    const retrieved = await getAuthCode("auth-code-abc");
     expect(retrieved).not.toBeNull();
     expect(retrieved!.clientId).toBe("test-client-123");
     expect(retrieved!.codeChallenge).toBe("challenge123");
   });
 
   it("should return null for non-existent code", async () => {
-    const result = getAuthCode("non-existent");
+    const result = await getAuthCode("non-existent");
     expect(result).toBeNull();
   });
 
   it("should delete an auth code", async () => {
-    storeAuthCode(mockAuthCode);
-    deleteAuthCode("auth-code-abc");
-    const result = getAuthCode("auth-code-abc");
+    await storeAuthCode(mockAuthCode);
+    await deleteAuthCode("auth-code-abc");
+    const result = await getAuthCode("auth-code-abc");
     expect(result).toBeNull();
   });
 });
@@ -147,20 +147,20 @@ describe("JWT secret store", () => {
   });
 
   it("should store and retrieve an encrypted JWT secret", async () => {
-    setDeploymentJWTSecret("my-mcp", "super-secret-jwt-key");
-    const retrieved = getDeploymentJWTSecret("my-mcp");
+    await setDeploymentJWTSecret("my-mcp", "super-secret-jwt-key");
+    const retrieved = await getDeploymentJWTSecret("my-mcp");
     expect(retrieved).toBe("super-secret-jwt-key");
   });
 
   it("should return null for non-existent slug", async () => {
-    const result = getDeploymentJWTSecret("non-existent");
+    const result = await getDeploymentJWTSecret("non-existent");
     expect(result).toBeNull();
   });
 
   it("should overwrite on re-set", async () => {
-    setDeploymentJWTSecret("my-mcp", "old-secret");
-    setDeploymentJWTSecret("my-mcp", "new-secret");
-    const result = getDeploymentJWTSecret("my-mcp");
+    await setDeploymentJWTSecret("my-mcp", "old-secret");
+    await setDeploymentJWTSecret("my-mcp", "new-secret");
+    const result = await getDeploymentJWTSecret("my-mcp");
     expect(result).toBe("new-secret");
   });
 });
@@ -171,20 +171,20 @@ describe("Worker URL mapping", () => {
   });
 
   it("should map worker URL to slug", async () => {
-    mapWorkerUrlToSlug("https://my-worker.workers.dev", "my-mcp");
-    const slug = getSlugForWorkerUrl("https://my-worker.workers.dev");
+    await mapWorkerUrlToSlug("https://my-worker.workers.dev", "my-mcp");
+    const slug = await getSlugForWorkerUrl("https://my-worker.workers.dev");
     expect(slug).toBe("my-mcp");
   });
 
   it("should return null for unmapped URL", async () => {
-    const slug = getSlugForWorkerUrl("https://unknown.workers.dev");
+    const slug = await getSlugForWorkerUrl("https://unknown.workers.dev");
     expect(slug).toBeNull();
   });
 
   it("should overwrite mapping on re-map", async () => {
-    mapWorkerUrlToSlug("https://my-worker.workers.dev", "old-slug");
-    mapWorkerUrlToSlug("https://my-worker.workers.dev", "new-slug");
-    const slug = getSlugForWorkerUrl("https://my-worker.workers.dev");
+    await mapWorkerUrlToSlug("https://my-worker.workers.dev", "old-slug");
+    await mapWorkerUrlToSlug("https://my-worker.workers.dev", "new-slug");
+    const slug = await getSlugForWorkerUrl("https://my-worker.workers.dev");
     expect(slug).toBe("new-slug");
   });
 });

@@ -1,127 +1,57 @@
 /**
- * SQLite-backed storage for OAuth state: clients, authorization codes, and JWT secrets.
+ * OAuth storage facade — clients, authorization codes, JWT secrets, and the
+ * worker-URL → slug mapping.
+ *
+ * These delegate to the active Store (see ../store), so they run against the
+ * local SqliteStore or a hosted D1/Postgres backend without change. Kept as
+ * free functions for the OAuth provider and routes that already import them.
  */
 
-import { getDb } from "../db";
-import { encrypt, decrypt } from "../encryption";
+import { getStore } from "../store";
 import type { OAuthClient, AuthorizationCode } from "./types";
 
-function nowSeconds(): number {
-  return Math.floor(Date.now() / 1000);
+export function getOAuthClient(clientId: string): Promise<OAuthClient | null> {
+  return getStore().getOAuthClient(clientId);
 }
 
-/** Remove expired OAuth clients and auth codes. Called lazily on reads. */
-function cleanupExpired(): void {
-  const now = nowSeconds();
-  const db = getDb();
-  db.prepare("DELETE FROM oauth_clients WHERE expires_at < ?").run(now);
-  db.prepare("DELETE FROM oauth_codes WHERE expires_at < ?").run(now);
+export function storeOAuthClient(client: OAuthClient): Promise<void> {
+  return getStore().storeOAuthClient(client);
 }
 
-const AUTH_CODE_TTL = 600; // 10 minutes
-const CLIENT_TTL = 60 * 60 * 24 * 365; // 1 year
-
-// ─── OAuth Clients (Dynamic Client Registration) ───
-
-export function getOAuthClient(
-  clientId: string
-): OAuthClient | null {
-  cleanupExpired();
-  const row = getDb()
-    .prepare(
-      "SELECT data, expires_at FROM oauth_clients WHERE client_id = ?"
-    )
-    .get(clientId) as { data: string; expires_at: number } | undefined;
-
-  if (!row) return null;
-  return JSON.parse(row.data) as OAuthClient;
+export function deleteOAuthClient(clientId: string): Promise<void> {
+  return getStore().deleteOAuthClient(clientId);
 }
 
-export function storeOAuthClient(client: OAuthClient): void {
-  getDb()
-    .prepare(
-      "INSERT OR REPLACE INTO oauth_clients (client_id, data, expires_at) VALUES (?, ?, ?)"
-    )
-    .run(client.client_id, JSON.stringify(client), nowSeconds() + CLIENT_TTL);
+export function storeAuthCode(code: AuthorizationCode): Promise<void> {
+  return getStore().storeAuthCode(code);
 }
 
-export function deleteOAuthClient(clientId: string): void {
-  getDb()
-    .prepare("DELETE FROM oauth_clients WHERE client_id = ?")
-    .run(clientId);
+export function getAuthCode(code: string): Promise<AuthorizationCode | null> {
+  return getStore().getAuthCode(code);
 }
 
-// ─── Authorization Codes ───
-
-export function storeAuthCode(code: AuthorizationCode): void {
-  getDb()
-    .prepare(
-      "INSERT OR REPLACE INTO oauth_codes (code, data, expires_at) VALUES (?, ?, ?)"
-    )
-    .run(code.code, JSON.stringify(code), nowSeconds() + AUTH_CODE_TTL);
+export function deleteAuthCode(code: string): Promise<void> {
+  return getStore().deleteAuthCode(code);
 }
 
-export function getAuthCode(
-  code: string
-): AuthorizationCode | null {
-  cleanupExpired();
-  const row = getDb()
-    .prepare("SELECT data, expires_at FROM oauth_codes WHERE code = ?")
-    .get(code) as { data: string; expires_at: number } | undefined;
-
-  if (!row) return null;
-  return JSON.parse(row.data) as AuthorizationCode;
-}
-
-export function deleteAuthCode(code: string): void {
-  getDb().prepare("DELETE FROM oauth_codes WHERE code = ?").run(code);
-}
-
-// ─── Per-Deployment JWT Secrets ───
-
-export function getDeploymentJWTSecret(
-  slug: string
-): string | null {
-  const row = getDb()
-    .prepare("SELECT secret FROM jwt_secrets WHERE slug = ?")
-    .get(slug) as { secret: string } | undefined;
-
-  if (!row) return null;
-  return decrypt(row.secret);
+export function getDeploymentJWTSecret(slug: string): Promise<string | null> {
+  return getStore().getDeploymentJWTSecret(slug);
 }
 
 export function setDeploymentJWTSecret(
   slug: string,
   secret: string
-): void {
-  getDb()
-    .prepare(
-      "INSERT OR REPLACE INTO jwt_secrets (slug, secret) VALUES (?, ?)"
-    )
-    .run(slug, encrypt(secret));
+): Promise<void> {
+  return getStore().setDeploymentJWTSecret(slug, secret);
 }
 
-/**
- * Find which deployment slug corresponds to a given worker URL.
- * Used during token issuance to find the JWT secret for a resource.
- */
-export function getSlugForWorkerUrl(
-  workerUrl: string
-): string | null {
-  const row = getDb()
-    .prepare("SELECT slug FROM worker_url_mapping WHERE worker_url = ?")
-    .get(workerUrl) as { slug: string } | undefined;
-
-  return row?.slug ?? null;
+export function getSlugForWorkerUrl(workerUrl: string): Promise<string | null> {
+  return getStore().getSlugForWorkerUrl(workerUrl);
 }
 
 export function mapWorkerUrlToSlug(
   workerUrl: string,
   slug: string
-): void {
-  getDb()
-    .prepare(
-      "INSERT OR REPLACE INTO worker_url_mapping (worker_url, slug) VALUES (?, ?)"
-    )
-    .run(workerUrl, slug);
+): Promise<void> {
+  return getStore().mapWorkerUrlToSlug(workerUrl, slug);
 }

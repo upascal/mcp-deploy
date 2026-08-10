@@ -88,7 +88,7 @@ export async function registerClient(
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  storeOAuthClient(client);
+  await storeOAuthClient(client);
 
   return client;
 }
@@ -182,7 +182,7 @@ export async function generateAuthCode(
     expiresAt: now + 600, // 10 minutes
   };
 
-  storeAuthCode(authCode);
+  await storeAuthCode(authCode);
   return code;
 }
 
@@ -209,7 +209,7 @@ export async function exchangeCodeForToken(params: {
   }
 
   // Look up the authorization code
-  const authCode = getAuthCode(params.code);
+  const authCode = await getAuthCode(params.code);
   if (!authCode) {
     return { error: "invalid_grant", error_description: "Invalid or expired authorization code" };
   }
@@ -217,7 +217,7 @@ export async function exchangeCodeForToken(params: {
   // Verify the code hasn't expired
   const now = Math.floor(Date.now() / 1000);
   if (authCode.expiresAt < now) {
-    deleteAuthCode(params.code);
+    await deleteAuthCode(params.code);
     return { error: "invalid_grant", error_description: "Authorization code expired" };
   }
 
@@ -244,11 +244,11 @@ export async function exchangeCodeForToken(params: {
   }
 
   // Delete the code (single use)
-  deleteAuthCode(params.code);
+  await deleteAuthCode(params.code);
 
   // Find the JWT secret for the target resource
   const resource = authCode.resource;
-  const slug = getSlugForWorkerUrl(resource);
+  const slug = await getSlugForWorkerUrl(resource);
   if (!slug) {
     return {
       error: "invalid_grant",
@@ -256,7 +256,7 @@ export async function exchangeCodeForToken(params: {
     };
   }
 
-  const jwtSecret = getDeploymentJWTSecret(slug);
+  const jwtSecret = await getDeploymentJWTSecret(slug);
   if (!jwtSecret) {
     return {
       error: "server_error",

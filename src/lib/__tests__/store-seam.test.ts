@@ -70,6 +70,24 @@ function fakeStore(): Store & { calls: string[] } {
       return null;
     },
     async setLatestVersionCache() {},
+    async getOAuthClient() {
+      return null;
+    },
+    async storeOAuthClient() {},
+    async deleteOAuthClient() {},
+    async storeAuthCode() {},
+    async getAuthCode() {
+      return null;
+    },
+    async deleteAuthCode() {},
+    async getDeploymentJWTSecret() {
+      return null;
+    },
+    async setDeploymentJWTSecret() {},
+    async getSlugForWorkerUrl() {
+      return null;
+    },
+    async mapWorkerUrlToSlug() {},
   };
 }
 
