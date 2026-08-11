@@ -27,6 +27,10 @@ import { decrypt, encrypt } from "./encryption";
 import { generateBearerTokenWrapper } from "./worker-bearer-wrapper";
 import { generateOAuthWrapper } from "./worker-oauth-wrapper";
 import { generateOpenWrapper } from "./worker-open-wrapper";
+import {
+  getDeploymentJWTSecret,
+  setDeploymentJWTSecret,
+} from "./oauth/store";
 import { randomBytes } from "crypto";
 import type {
   AddMcpResult,
@@ -189,7 +193,15 @@ export async function deployMcp(
 
   let oauthEnabled = false;
   if (authMode === "oauth") {
-    const jwtSecret = randomBytes(32).toString("hex");
+    // Reuse the existing JWT signing secret across redeploys. Rotating it
+    // would invalidate every access token clients already hold, so it must be
+    // stable — including through the "update all deployments" flow. Only
+    // generate a fresh one on first deploy.
+    let jwtSecret = await getDeploymentJWTSecret(slug);
+    if (!jwtSecret) {
+      jwtSecret = randomBytes(32).toString("hex");
+      await setDeploymentJWTSecret(slug, jwtSecret);
+    }
     allWorkerSecrets.OAUTH_JWT_SECRET = jwtSecret;
     if (oauthPassword) {
       allWorkerSecrets.OAUTH_PASSWORD = oauthPassword;
