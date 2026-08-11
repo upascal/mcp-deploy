@@ -1,6 +1,7 @@
 import type { McpRegistryEntry, ResolvedMcpEntry, StoredMcpEntry } from "./types";
 import { getMcps, addMcp, hasSeededDefaults, markSeededDefaults, getCachedMetadata, setCachedMetadata, getCachedMetadataForDisplay } from "./store";
 import { fetchMcpMetadata, getLatestVersion } from "./github-releases";
+import { namespaceWorkerName } from "./deploy-context";
 
 /**
  * Default MCPs to seed on first run.
@@ -98,7 +99,7 @@ export async function resolveMcpEntry(
     description: metadata.description,
     version: version,
 
-    workerName: metadata.worker.name,
+    workerName: namespaceWorkerName(metadata.worker.name),
     durableObjectBinding: metadata.worker.durableObjectBinding,
     durableObjectClassName: metadata.worker.durableObjectClassName,
     compatibilityDate: metadata.worker.compatibilityDate,
@@ -135,7 +136,7 @@ export async function resolveMcpEntryFromCache(
     description: metadata.description,
     version: version,
 
-    workerName: metadata.worker.name,
+    workerName: namespaceWorkerName(metadata.worker.name),
     durableObjectBinding: metadata.worker.durableObjectBinding,
     durableObjectClassName: metadata.worker.durableObjectClassName,
     compatibilityDate: metadata.worker.compatibilityDate,

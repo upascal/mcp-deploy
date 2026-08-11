@@ -14,6 +14,15 @@
 // ─── Storage seam ───
 // Implement Store, then setStore(new YourStore()) once at startup.
 export { getStore, setStore } from "./store";
+
+// ─── Per-request worker-name namespace (multi-tenant hosting) ───
+// Wrap a request in withWorkerNamespace(handle, ...) so each user's worker is
+// deployed under a distinct name.
+export {
+  withWorkerNamespace,
+  currentWorkerSuffix,
+  namespaceWorkerName,
+} from "./deploy-context";
 export type {
   Store,
   CachedMetadata,
