@@ -1,6 +1,6 @@
 {
   "name": "mcp-deploy",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": false,
   "description": "Deploy and manage MCP (Model Context Protocol) servers on Cloudflare Workers",
   "keywords": [
