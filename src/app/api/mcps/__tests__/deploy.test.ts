@@ -45,6 +45,13 @@ vi.mock("@/lib/worker-open-wrapper", () => ({
   generateOpenWrapper: vi.fn(() => "// open wrapper code"),
 }));
 
+const mockJwt = vi.hoisted(() => ({
+  getDeploymentJWTSecret: vi.fn(),
+  setDeploymentJWTSecret: vi.fn(),
+}));
+
+vi.mock("@/lib/oauth/store", () => mockJwt);
+
 import { POST as deployHandler } from "../../mcps/[slug]/deploy/route";
 import { getStoredMcp, resolveMcpEntry, getBundleContent } from "@/lib/mcp-registry";
 import { getDeployService } from "@/lib/cloudflare-config";
@@ -108,6 +115,37 @@ describe("POST /api/mcps/[slug]/deploy", () => {
     expect(body.bearerToken).toBeDefined();
     expect(body.mcpUrl).toContain("/mcp");
     expect(body.authMode).toBe("bearer");
+  });
+
+  it("oauth first deploy: generates and persists a JWT secret", async () => {
+    mockJwt.getDeploymentJWTSecret.mockResolvedValue(null);
+
+    const res = await deployHandler(makeRequest({ authMode: "oauth" }), {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockJwt.setDeploymentJWTSecret).toHaveBeenCalledOnce();
+    const [slug, generated] = mockJwt.setDeploymentJWTSecret.mock.calls[0];
+    expect(slug).toBe("test-mcp");
+    // The generated secret is what gets set on the worker.
+    const setArg = mockCf.setSecrets.mock.calls[0][1];
+    expect(setArg.OAUTH_JWT_SECRET).toBe(generated);
+  });
+
+  it("oauth redeploy: reuses the stored JWT secret, never rotating it", async () => {
+    // The bug this guards against: a fresh secret on every deploy invalidated
+    // all live access tokens.
+    mockJwt.getDeploymentJWTSecret.mockResolvedValue("existing-signing-secret");
+
+    const res = await deployHandler(makeRequest({ authMode: "oauth" }), {
+      params: Promise.resolve({ slug: "test-mcp" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockJwt.setDeploymentJWTSecret).not.toHaveBeenCalled();
+    const setArg = mockCf.setSecrets.mock.calls[0][1];
+    expect(setArg.OAUTH_JWT_SECRET).toBe("existing-signing-secret");
   });
 
   it("should return 404 for unknown MCP", async () => {

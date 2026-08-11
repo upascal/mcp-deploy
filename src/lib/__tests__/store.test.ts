@@ -63,10 +63,6 @@ function createSchema(db: Database.Database) {
       slug TEXT PRIMARY KEY,
       secret TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS worker_url_mapping (
-      worker_url TEXT PRIMARY KEY,
-      slug TEXT NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS metadata_cache (
       slug TEXT PRIMARY KEY,
       metadata TEXT NOT NULL,
@@ -227,11 +223,6 @@ describe("store", () => {
         .run(slug);
       testDb
         .prepare(
-          "INSERT INTO worker_url_mapping (worker_url, slug) VALUES ('https://test.workers.dev', ?)"
-        )
-        .run(slug);
-      testDb
-        .prepare(
           "INSERT INTO metadata_cache (slug, metadata, bundle_url, version, fetched_at) VALUES (?, '{}', 'url', 'v1', 0)"
         )
         .run(slug);
@@ -244,14 +235,12 @@ describe("store", () => {
       const dep = testDb.prepare("SELECT * FROM deployments WHERE slug = ?").get(slug);
       const sec = testDb.prepare("SELECT * FROM secrets WHERE slug = ?").get(slug);
       const jwt = testDb.prepare("SELECT * FROM jwt_secrets WHERE slug = ?").get(slug);
-      const url = testDb.prepare("SELECT * FROM worker_url_mapping WHERE slug = ?").get(slug);
       const cache = testDb.prepare("SELECT * FROM metadata_cache WHERE slug = ?").get(slug);
 
       expect(mcp).toBeUndefined();
       expect(dep).toBeUndefined();
       expect(sec).toBeUndefined();
       expect(jwt).toBeUndefined();
-      expect(url).toBeUndefined();
       expect(cache).toBeUndefined();
     });
   });

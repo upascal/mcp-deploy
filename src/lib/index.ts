@@ -77,9 +77,3 @@ export {
 
 // ─── Shared domain types ───
 export type * from "./types";
-export type {
-  OAuthClient,
-  AuthorizationCode,
-  AccessTokenClaims,
-  OAuthError,
-} from "./oauth/types";

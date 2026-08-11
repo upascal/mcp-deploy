@@ -82,30 +82,10 @@ function createTables(db: Database.Database): void {
       value TEXT
     );
 
-    -- OAuth clients
-    CREATE TABLE IF NOT EXISTS oauth_clients (
-      client_id TEXT PRIMARY KEY,
-      data TEXT NOT NULL,
-      expires_at INTEGER NOT NULL
-    );
-
-    -- OAuth auth codes
-    CREATE TABLE IF NOT EXISTS oauth_codes (
-      code TEXT PRIMARY KEY,
-      data TEXT NOT NULL,
-      expires_at INTEGER NOT NULL
-    );
-
-    -- JWT secrets per deployment
+    -- Per-deployment OAuth JWT signing secret (persisted so redeploys reuse it)
     CREATE TABLE IF NOT EXISTS jwt_secrets (
       slug TEXT PRIMARY KEY,
       secret TEXT NOT NULL
-    );
-
-    -- Worker URL to slug mapping
-    CREATE TABLE IF NOT EXISTS worker_url_mapping (
-      worker_url TEXT PRIMARY KEY,
-      slug TEXT NOT NULL
     );
 
     -- Metadata cache (avoid re-fetching from GitHub on every page load)
@@ -128,8 +108,6 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_deployments_slug ON deployments(slug);
     CREATE INDEX IF NOT EXISTS idx_secrets_slug ON secrets(slug);
     CREATE INDEX IF NOT EXISTS idx_metadata_cache_slug ON metadata_cache(slug);
-    CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires_at ON oauth_codes(expires_at);
-    CREATE INDEX IF NOT EXISTS idx_oauth_clients_expires_at ON oauth_clients(expires_at);
   `);
 }
 
@@ -309,38 +287,19 @@ function migrateFromJson(db: Database.Database): void {
       const store: LegacyOAuthStore = JSON.parse(raw);
 
       const tx = db.transaction(() => {
-        const insertClient = db.prepare(
-          "INSERT OR IGNORE INTO oauth_clients (client_id, data, expires_at) VALUES (?, ?, ?)"
-        );
-        for (const [clientId, entry] of Object.entries(store.clients)) {
-          insertClient.run(clientId, JSON.stringify(entry.data), entry.expiresAt);
-        }
-
-        const insertCode = db.prepare(
-          "INSERT OR IGNORE INTO oauth_codes (code, data, expires_at) VALUES (?, ?, ?)"
-        );
-        for (const [code, entry] of Object.entries(store.authCodes)) {
-          insertCode.run(code, JSON.stringify(entry.data), entry.expiresAt);
-        }
-
-        // JWT secrets — re-encrypt with new key
+        // Only JWT secrets survive: the OAuth clients/codes/url-mapping that
+        // this legacy file also held belonged to the removed dashboard auth
+        // server. Each deployed worker is now its own OAuth server.
         const insertJwt = db.prepare(
           "INSERT OR IGNORE INTO jwt_secrets (slug, secret) VALUES (?, ?)"
         );
-        for (const [slug, secret] of Object.entries(store.jwtSecrets)) {
+        for (const [slug, secret] of Object.entries(store.jwtSecrets ?? {})) {
           let reEncrypted = secret;
           const plaintext = legacyDecrypt(secret);
           if (plaintext) {
             reEncrypted = currentEncrypt(plaintext);
           }
           insertJwt.run(slug, reEncrypted);
-        }
-
-        const insertUrl = db.prepare(
-          "INSERT OR IGNORE INTO worker_url_mapping (worker_url, slug) VALUES (?, ?)"
-        );
-        for (const [url, slug] of Object.entries(store.urlToSlug)) {
-          insertUrl.run(url, slug);
         }
       });
       tx();

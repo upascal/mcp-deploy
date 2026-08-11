@@ -18,7 +18,6 @@ import type {
   McpSecretsRecord,
   StoredMcpEntry,
 } from "./types";
-import type { OAuthClient, AuthorizationCode } from "./oauth/types";
 
 export interface CachedMetadata {
   metadata: McpMetadata;
@@ -70,19 +69,9 @@ export interface Store {
   getLatestVersionCache(slug: string): Promise<LatestVersionCacheEntry | null>;
   setLatestVersionCache(slug: string, version: string): Promise<void>;
 
-  // OAuth: dynamically-registered clients
-  getOAuthClient(clientId: string): Promise<OAuthClient | null>;
-  storeOAuthClient(client: OAuthClient): Promise<void>;
-  deleteOAuthClient(clientId: string): Promise<void>;
-
-  // OAuth: authorization codes
-  storeAuthCode(code: AuthorizationCode): Promise<void>;
-  getAuthCode(code: string): Promise<AuthorizationCode | null>;
-  deleteAuthCode(code: string): Promise<void>;
-
-  // OAuth: per-deployment JWT secrets and worker-URL → slug mapping
+  // Per-deployment OAuth JWT signing secret. Each deployed worker is its own
+  // self-contained OAuth server; this persists its signing secret (encrypted)
+  // so redeploys reuse it instead of invalidating outstanding tokens.
   getDeploymentJWTSecret(slug: string): Promise<string | null>;
   setDeploymentJWTSecret(slug: string, secret: string): Promise<void>;
-  getSlugForWorkerUrl(workerUrl: string): Promise<string | null>;
-  mapWorkerUrlToSlug(workerUrl: string, slug: string): Promise<void>;
 }

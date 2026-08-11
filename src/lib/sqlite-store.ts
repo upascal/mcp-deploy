@@ -19,15 +19,8 @@ import type {
   LatestVersionCacheEntry,
   Store,
 } from "./store-types";
-import type { OAuthClient, AuthorizationCode } from "./oauth/types";
 
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const AUTH_CODE_TTL = 600; // 10 minutes
-const CLIENT_TTL = 60 * 60 * 24 * 365; // 1 year
-
-function nowSeconds(): number {
-  return Math.floor(Date.now() / 1000);
-}
 
 export class SqliteStore implements Store {
   // ─── Deployment Records ───
@@ -212,8 +205,6 @@ export class SqliteStore implements Store {
       db.prepare("DELETE FROM jwt_secrets WHERE slug = ?").run(slug);
       db.prepare("DELETE FROM metadata_cache WHERE slug = ?").run(slug);
       db.prepare("DELETE FROM latest_version_cache WHERE slug = ?").run(slug);
-      // worker_url_mapping uses worker_url as PK, so delete by slug column
-      db.prepare("DELETE FROM worker_url_mapping WHERE slug = ?").run(slug);
       db.prepare("DELETE FROM mcps WHERE slug = ?").run(slug);
     });
     tx();
@@ -375,65 +366,7 @@ export class SqliteStore implements Store {
       .run(slug, version, Date.now());
   }
 
-  // ─── OAuth Clients ───
-
-  /** Remove expired OAuth clients and auth codes. Called lazily on reads. */
-  private cleanupExpired(): void {
-    const now = nowSeconds();
-    const db = getDb();
-    db.prepare("DELETE FROM oauth_clients WHERE expires_at < ?").run(now);
-    db.prepare("DELETE FROM oauth_codes WHERE expires_at < ?").run(now);
-  }
-
-  async getOAuthClient(clientId: string): Promise<OAuthClient | null> {
-    this.cleanupExpired();
-    const row = getDb()
-      .prepare("SELECT data, expires_at FROM oauth_clients WHERE client_id = ?")
-      .get(clientId) as { data: string; expires_at: number } | undefined;
-
-    if (!row) return null;
-    return JSON.parse(row.data) as OAuthClient;
-  }
-
-  async storeOAuthClient(client: OAuthClient): Promise<void> {
-    getDb()
-      .prepare(
-        "INSERT OR REPLACE INTO oauth_clients (client_id, data, expires_at) VALUES (?, ?, ?)"
-      )
-      .run(client.client_id, JSON.stringify(client), nowSeconds() + CLIENT_TTL);
-  }
-
-  async deleteOAuthClient(clientId: string): Promise<void> {
-    getDb()
-      .prepare("DELETE FROM oauth_clients WHERE client_id = ?")
-      .run(clientId);
-  }
-
-  // ─── Authorization Codes ───
-
-  async storeAuthCode(code: AuthorizationCode): Promise<void> {
-    getDb()
-      .prepare(
-        "INSERT OR REPLACE INTO oauth_codes (code, data, expires_at) VALUES (?, ?, ?)"
-      )
-      .run(code.code, JSON.stringify(code), nowSeconds() + AUTH_CODE_TTL);
-  }
-
-  async getAuthCode(code: string): Promise<AuthorizationCode | null> {
-    this.cleanupExpired();
-    const row = getDb()
-      .prepare("SELECT data, expires_at FROM oauth_codes WHERE code = ?")
-      .get(code) as { data: string; expires_at: number } | undefined;
-
-    if (!row) return null;
-    return JSON.parse(row.data) as AuthorizationCode;
-  }
-
-  async deleteAuthCode(code: string): Promise<void> {
-    getDb().prepare("DELETE FROM oauth_codes WHERE code = ?").run(code);
-  }
-
-  // ─── Per-Deployment JWT Secrets & worker-URL mapping ───
+  // ─── Per-Deployment JWT Signing Secret ───
 
   async getDeploymentJWTSecret(slug: string): Promise<string | null> {
     const row = getDb()
@@ -448,21 +381,5 @@ export class SqliteStore implements Store {
     getDb()
       .prepare("INSERT OR REPLACE INTO jwt_secrets (slug, secret) VALUES (?, ?)")
       .run(slug, encrypt(secret));
-  }
-
-  async getSlugForWorkerUrl(workerUrl: string): Promise<string | null> {
-    const row = getDb()
-      .prepare("SELECT slug FROM worker_url_mapping WHERE worker_url = ?")
-      .get(workerUrl) as { slug: string } | undefined;
-
-    return row?.slug ?? null;
-  }
-
-  async mapWorkerUrlToSlug(workerUrl: string, slug: string): Promise<void> {
-    getDb()
-      .prepare(
-        "INSERT OR REPLACE INTO worker_url_mapping (worker_url, slug) VALUES (?, ?)"
-      )
-      .run(workerUrl, slug);
   }
 }
