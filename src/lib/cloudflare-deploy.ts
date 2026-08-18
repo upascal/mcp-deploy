@@ -149,7 +149,9 @@ export class CloudflareDeployService {
         new_tag: entry.migrationTag,
         steps: [
           {
-            new_classes: [entry.durableObjectClassName],
+            // SQLite-backed DO only. Listing the class in new_classes as well
+            // makes it "the target of more than one migration" (API error
+            // 10021) — the wrangler path always sent new_sqlite_classes alone.
             new_sqlite_classes: [entry.durableObjectClassName],
           },
         ],
