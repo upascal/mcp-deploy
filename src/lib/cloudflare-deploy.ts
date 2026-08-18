@@ -216,24 +216,28 @@ export class CloudflareDeployService {
     filtered.forEach(([name]) => validateSecretName(name));
     if (filtered.length === 0) return;
 
-    // Use the bulk secrets API
-    const body = filtered.map(([name, text]) => ({ name, text, type: "secret_text" }));
+    // The secrets endpoint accepts one secret object per PUT — there is no
+    // array/bulk variant at this path (sending an array is API error 10026).
+    // Sequential, not Promise.all: each PUT writes script settings.
+    for (const [name, text] of filtered) {
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/scripts/${workerName}/secrets`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${this.getToken()}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name, text, type: "secret_text" }),
+        }
+      );
 
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/scripts/${workerName}/secrets`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${this.getToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(
+          `Failed to set secret "${name}" (${response.status}): ${errText}`
+        );
       }
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Failed to set secrets (${response.status}): ${text}`);
     }
   }
 

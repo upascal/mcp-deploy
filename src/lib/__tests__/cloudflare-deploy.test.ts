@@ -173,3 +173,52 @@ describe("CloudflareDeployService.deployWorker migrations", () => {
     fetchMock.mockRestore();
   });
 });
+
+describe("CloudflareDeployService.setSecrets", () => {
+  it("sends one single-object PUT per secret (API error 10026 on arrays)", async () => {
+    // The secrets endpoint has no bulk variant: an array body fails to parse.
+    const bodies: Array<{ url: string; body: unknown }> = [];
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        bodies.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      });
+
+    const service = new CloudflareDeployService("token", "acct-123");
+    await service.setSecrets("my-worker", { A: "1", B: "2", EMPTY: "" });
+
+    // Empty values are filtered; each remaining secret gets its own request.
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/acct-123/workers/scripts/my-worker/secrets"
+    );
+    expect(bodies[0].body).toEqual({ name: "A", text: "1", type: "secret_text" });
+    expect(bodies[1].body).toEqual({ name: "B", text: "2", type: "secret_text" });
+
+    fetchMock.mockRestore();
+  });
+
+  it("throws with the secret name when a PUT fails", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("bad request", { status: 400 }));
+
+    const service = new CloudflareDeployService("token", "acct-123");
+    await expect(
+      service.setSecrets("my-worker", { BROKEN: "value" })
+    ).rejects.toThrow('Failed to set secret "BROKEN" (400)');
+
+    fetchMock.mockRestore();
+  });
+
+  it("skips the API entirely when every value is empty", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    const service = new CloudflareDeployService("token", "acct-123");
+    await service.setSecrets("my-worker", { A: "" });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockRestore();
+  });
+});
