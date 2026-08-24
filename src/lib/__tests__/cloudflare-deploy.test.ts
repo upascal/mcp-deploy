@@ -9,7 +9,6 @@ vi.mock("cloudflare", () => ({
   default: class {
     kv = { namespaces: { list: mockList, create: mockCreate } };
     workers = { scripts: { get: mockScriptsGet, delete: vi.fn() } };
-    _options = { apiToken: "test-token" };
   },
 }));
 
@@ -114,7 +113,7 @@ describe("CloudflareDeployService.deployWorker migrations", () => {
     // New worker: the exists-probe must fail.
     mockScriptsGet.mockRejectedValue(new Error("not found"));
 
-    const uploads: Array<{ url: string; metadata: unknown }> = [];
+    const uploads: Array<{ url: string; auth: unknown; metadata: unknown }> = [];
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input, init) => {
@@ -122,7 +121,8 @@ describe("CloudflareDeployService.deployWorker migrations", () => {
         if (init?.method === "PUT") {
           const form = init.body as FormData;
           const blob = form.get("metadata") as Blob;
-          uploads.push({ url, metadata: JSON.parse(await blob.text()) });
+          const auth = (init.headers as Record<string, string>).Authorization;
+          uploads.push({ url, auth, metadata: JSON.parse(await blob.text()) });
         }
         return new Response(
           JSON.stringify({ success: true, result: { subdomain: "acct" } }),
@@ -135,6 +135,9 @@ describe("CloudflareDeployService.deployWorker migrations", () => {
 
     expect(url).toBe("https://paper-search-mcp-upascal.acct.workers.dev");
     expect(uploads).toHaveLength(1);
+    // The upload must authenticate with the constructor token (a broken
+    // extraction here once sent "Bearer " with no token under test).
+    expect(uploads[0].auth).toBe("Bearer token");
     const migrations = (uploads[0].metadata as {
       migrations: { new_tag: string; steps: Record<string, unknown>[] };
     }).migrations;

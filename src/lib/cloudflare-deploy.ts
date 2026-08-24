@@ -5,7 +5,7 @@
  * Handles:
  * - Token validation
  * - Worker deployment (multi-module upload)
- * - Secret management (bulk put / delete)
+ * - Secret management (one PUT per secret / delete)
  * - Health checks
  * - Worker deletion
  */
@@ -43,10 +43,12 @@ function validateSecretName(name: string): void {
 export class CloudflareDeployService {
   private client: Cloudflare;
   private accountId: string;
+  private apiToken: string;
 
   constructor(apiToken: string, accountId: string) {
     this.client = new Cloudflare({ apiToken });
     this.accountId = accountId;
+    this.apiToken = apiToken;
   }
 
   // ─── Static helpers ───
@@ -181,7 +183,7 @@ export class CloudflareDeployService {
       {
         method: "PUT",
         headers: {
-          Authorization: `Bearer ${(this.client as unknown as { apiToken: string }).apiToken ?? ""}`,
+          Authorization: `Bearer ${this.getToken()}`,
         },
         body: formData,
       }
@@ -205,7 +207,7 @@ export class CloudflareDeployService {
   // ─── Secrets ───
 
   /**
-   * Set multiple secrets on a worker (bulk).
+   * Set multiple secrets on a worker, one PUT per secret.
    */
   async setSecrets(
     workerName: string,
@@ -363,9 +365,8 @@ export class CloudflareDeployService {
   }
 
   private getToken(): string {
-    // Extract the API token from the client. The cloudflare SDK stores it internally.
-    // We also received it in the constructor, so we use a workaround.
-    return (this.client as unknown as { _options: { apiToken: string } })
-      ._options.apiToken;
+    // The raw-fetch paths need the token the SDK client was built with; the
+    // constructor keeps its own copy rather than reaching into SDK internals.
+    return this.apiToken;
   }
 }
