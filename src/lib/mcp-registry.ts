@@ -17,6 +17,10 @@ export const DEFAULT_MCPS: McpRegistryEntry[] = [
     slug: "paper-search-mcp",
     githubRepo: "upascal/paper-search-mcp",
   },
+  {
+    slug: "mcp-deploy-mcp",
+    githubRepo: "upascal/mcp-deploy-mcp",
+  },
 ];
 
 /**
