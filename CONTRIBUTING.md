@@ -232,6 +232,23 @@ chore: update dependencies
 - Ensure all tests pass before submitting
 - Link to related issues using "Fixes #123" or "Closes #123"
 
+## Releases
+
+Every batch of code changes on `main` should end in a release — do not let
+fixes sit unreleased:
+
+1. Bump `version` in `package.json` in a standalone commit titled
+   `chore: release v0.1.X` (bumps are not bundled into feature commits).
+2. Tag it `v0.1.X` and push the tag along with `main`. The tag push triggers
+   CI (`.github/workflows/release.yml`): lint → test → build → npm publish
+   (OIDC trusted publishing) → GitHub release with generated notes.
+
+Why the version bump matters beyond npm: consumers install this package as a
+git dependency pinned to a commit, and webpack treats `node_modules` as
+"managed" — cached compilations are validated by **package version, not file
+content**. Code changes without a version bump are invisible to a consumer's
+build cache and can keep serving stale compiled output.
+
 ## Reporting Bugs
 
 If you find a bug, please open an issue on GitHub with:
