@@ -6,6 +6,11 @@ Question: should mcp-deploy become a hosted web app where users get MCPs
 without a Cloudflare account, and if so, where is the boundary between
 "I host it" and "you deploy your own"?
 
+**Built so far:** phase 1 (§11), the phase 2 storage seam (§12), phase 4's
+worker-name namespace plus the library surface the hosted app consumes (§13),
+and the REST deploy path hardened against live Cloudflare (§14). Reviewed
+2026-11-18 — see §15 for what is actually left.
+
 ---
 
 ## 1. The pain we're actually solving
@@ -40,7 +45,9 @@ This matters, because the hosted design is much closer than it looks.
 
 **The REST deploy path already exists and is not tied to a local machine.**
 `src/lib/cloudflare-deploy.ts` (`CloudflareDeployService`) does worker upload,
-bulk secrets, health checks, and deletion entirely over the Cloudflare REST API.
+secrets, health checks, and deletion entirely over the Cloudflare REST API.
+(It *looked* like it did — two of those calls had never run against the real
+API and were in fact broken. See §14.)
 It is constructed as `new CloudflareDeployService(apiToken, accountId)` — it has
 no opinion about *whose* account that is. `src/app/api/mcps/[slug]/deploy`,
 `.../secrets`, and `.../status` already use it, reading credentials from the
@@ -156,10 +163,14 @@ keeps every property Model B buys — zero MCP changes, per-user isolation,
 per-worker secrets — and only removes the ceiling.
 
 - **Small diff.** Every call in `src/lib/cloudflare-deploy.ts` hits
-  `/accounts/{id}/workers/scripts/{name}` (lines 138, 179, 202). The platform
-  equivalent is `/accounts/{id}/workers/dispatch/namespaces/{ns}/scripts/{name}`
-  — same multipart upload, same bulk-secrets endpoint. About five call sites.
-  The `subdomain` calls (269, 287) disappear, replaced by dispatch routing.
+  `/accounts/{id}/workers/scripts/{name}` (lines 182, 226, 254 as of v0.1.9).
+  The platform equivalent is
+  `/accounts/{id}/workers/dispatch/namespaces/{ns}/scripts/{name}` — same
+  multipart upload, same secrets endpoint. About five call sites. The
+  `subdomain` calls (333, 351) disappear, replaced by dispatch routing.
+  Note the secrets endpoint takes **one secret per PUT**, not a bulk array
+  (§14), so a user with four secrets costs four sequential requests on either
+  path — unchanged by Model D, but worth knowing before estimating throughput.
 - **We own the URLs.** Endpoints become `mcp.ourlab.org/u/alice/zotero/mcp`
   rather than a `workers.dev` subdomain baked into whatever the user pasted into
   Claude, so scripts can be renamed or migrated without anyone re-pasting. This
@@ -236,6 +247,22 @@ In managed mode, default new deployments to **bearer** (one copy-paste URL, no
 password to communicate) and offer OAuth for anyone who wants it.
 
 ## 5. Data model changes
+
+> **Superseded 2026-11-18 — the implemented design does not do this.** The
+> schema below adds a `user_id` column to each table in *this* repo. What
+> actually shipped scopes tenancy one level up instead: the `Store` seam (§12)
+> means the hosted app implements its own multi-tenant backend and injects it
+> with `setStore()`, and `withWorkerNamespace` (§13) distinguishes the deployed
+> workers. The public repo's schema therefore stays single-tenant and keyed by
+> `slug` alone, and no `users` table is added here — the hosted app owns user
+> identity entirely. Prefer that: it keeps per-user concerns out of the local
+> tool, and it is why the two stay one codebase rather than a fork.
+>
+> Also stale below: `worker_url_mapping` and the OAuth client/code tables no
+> longer exist — they were removed with the dead dashboard authorization server
+> (§14). Only `jwt_secrets` survives.
+>
+> The paragraphs below are kept as the reasoning that led to the seam.
 
 The catalog stays global — we curate which MCPs are offered. Only deployment
 and secret state becomes per-user:
@@ -318,14 +345,20 @@ Each phase is independently shippable and useful on its own.
 |---|---|---|
 | **1** ✅ | Consolidate on `CloudflareDeployService`; retire the `wrangler` shell-out from the deploy path; feed real `cf_token` / `cf_account_id` from env | Anything hosted at all |
 | **2** ◐ | Move storage off local SQLite to D1/Postgres; deploy the dashboard to a URL | Kills the install/update pain — **biggest win per unit of work** |
-| **3** | Add auth + `users` table; add `user_id` to `deployments` / `secrets` | Multi-user |
-| **4** | Namespace worker names per user; implement managed deployment target | Model B |
-| **5** | Per-user BYO-Cloudflare setting in Settings | Model C preserved |
-| **6** | "Update all deployments" — redeploy every user's worker on a new release | The update pain, solved centrally |
+| **3** ☐ | Dashboard auth + user identity (**in the hosted repo**, not here — see §5) | Multi-user |
+| **4** ◐ | Namespace worker names per user ✅ (§13); managed deployment target still implicit | Model B |
+| **5** ☐ | Per-user BYO-Cloudflare setting in Settings | Model C preserved |
+| **6** ☐ | "Update all deployments" — redeploy every user's worker on a new release | The update pain, solved centrally |
 
 Phases 1–2 alone deliver most of the stated value and require no decision about
 secret custody. That is a good place to start regardless of how the Model B
 question ultimately lands.
+
+Revised note (2026-11-18): phase 4's namespace landed *before* phase 3, out of
+the order above, because the hosted app needed it to deploy a second user's
+worker at all — and it was 34 lines, not a milestone. The order in this table
+was never load-bearing; the dependency that is real is that **a public URL
+cannot precede auth** (§12).
 
 ## 10. Decision — 2026-08-07
 
@@ -429,3 +462,128 @@ swaps everything with a single `setStore()` call at startup.
   implementation in the private repo → add auth (phase 3) → then expose a URL.
   The public repo's storage seam is ready for that D1/Postgres implementation to
   drop in.
+
+## 13. Phase 4 namespace and the library surface — 2026-08-10 / 08-11
+
+Two pieces landed together, and between them they are the whole public-repo
+side of multi-tenancy.
+
+**`withWorkerNamespace` (`deploy-context.ts`, 34 lines).** The host wraps a
+request in `withWorkerNamespace(handle, fn)` and every worker name resolved
+inside is suffixed — `zotero-assistant-alice` rather than `zotero-assistant`.
+It is applied once, in `resolveMcpEntry` (both the network and cache-only
+paths), which deploy, undeploy, remove, update and status all resolve through,
+so the namespaced name is consistent across every operation with no
+per-operation plumbing. With no namespace set — the local tool — names are
+unchanged.
+
+It uses `AsyncLocalStorage`, so concurrent requests for different users stay
+isolated rather than racing a module-level variable; there is a test for that
+specifically. This is what §5 should have proposed instead of `user_id`
+columns: tenancy as an ambient request property, not a schema change.
+
+**The library surface (`src/lib/index.ts` + an `exports` map).** The hosted app
+imports `mcp-deploy/lib` for the storage seam, `CloudflareDeployService`, the
+shared deploy operations, MCP resolution, the worker wrappers, encryption and
+the domain types; `mcp-deploy/lib/*` reaches any individual module. This is the
+mechanism behind "one codebase with a parameter, not a fork" (§3) — the hosted
+control plane is a thin layer over this package rather than a copy of it.
+
+Worth being explicit about what this implies: **the hosted app is a separate,
+private repository.** This repo is the engine and the local tool; it should not
+grow auth, users, or a tenant UI. §5's correction follows from that.
+
+## 14. The REST path, hardened against live Cloudflare — 2026-08-11 → 08-24
+
+Phase 1 (§11) moved deploys onto the REST API, but parts of that service had
+never run against the real API. Three defects surfaced once the hosted app
+actually deployed a namespaced worker, and they are worth recording because
+each was invisible to the test suite as it stood:
+
+- **Durable Object migration declared the class twice (API error 10021).**
+  `deployWorker` listed the DO class in both `new_classes` and
+  `new_sqlite_classes`; Cloudflare rejects that as "class cannot be the target
+  of more than one migration," so every REST-path deploy of a *new* worker
+  failed at upload. The old wrangler path sent `new_sqlite_classes` alone,
+  which is why already-created workers never hit it — the bug was latent from
+  the day the REST service was written and surfaced on the first genuinely new
+  worker, `paper-search-mcp-<handle>`, i.e. the first namespaced hosted deploy.
+  Now sqlite-only, with regression tests asserting the uploaded multipart
+  metadata (new worker → sqlite-only step; existing worker → no `migrations`
+  key).
+
+- **The secrets endpoint has no bulk variant (API error 10026).** `setSecrets`
+  sent a JSON *array* to `PUT /workers/scripts/:name/secrets`, but the endpoint
+  accepts exactly one `{name, text, type}` object per request. Every deploy
+  with at least one secret failed to parse, and the cleanup path then deleted
+  the freshly-uploaded worker. Verified live both ways: the array body
+  reproduces 10026, the single object parses. Now one sequential PUT per
+  secret — sequential rather than `Promise.all` because each PUT writes script
+  settings.
+
+- **The OAuth JWT secret rotated on every deploy.** `deployMcp` generated a
+  fresh `OAUTH_JWT_SECRET` with `randomBytes` each time and never persisted it,
+  so every redeploy re-signed with a new key and invalidated every access token
+  clients already held — forcing re-authentication after each update. This was
+  the main reason OAuth "never worked that well." It would also have made the
+  phase 6 "update all deployments" feature log every user out on every release,
+  so it was a direct blocker on Model B's headline benefit. The secret is now
+  persisted encrypted via `getDeploymentJWTSecret` / `setDeploymentJWTSecret`
+  (store methods that existed for this but had never been wired) and reused on
+  redeploy; a fresh one is generated only on first deploy — mirroring how the
+  bearer token and OAuth password were already preserved.
+
+**The dead dashboard authorization server is gone.** The dashboard carried a
+second, parallel OAuth AS that was never wired into deploys: its `jwt_secrets`
+and `worker_url_mapping` tables had zero writers, so it could only ever read
+empty state. Removed: `oauth/provider.ts`, `oauth/jwt.ts`, `oauth/types.ts`,
+the `/api/oauth/*` routes, the dashboard's
+`/.well-known/oauth-authorization-server`, and the `/oauth/authorize` consent
+page, along with the `oauth_clients`, `oauth_codes` and `worker_url_mapping`
+tables. Each deployed worker remains a complete self-contained OAuth server —
+the spec permits co-hosting the authorization server with the resource server —
+so deployed workers were unaffected; they never called the dashboard.
+
+*Lesson for the remaining phases:* the tests were green throughout all three
+bugs because they asserted against mocks of endpoints nobody had exercised.
+The fixes that stuck added assertions on the **actual request payload** sent to
+Cloudflare. Phase 6 will upload at scale; it deserves the same treatment before
+it runs against every user's worker at once.
+
+## 15. Where this stands — 2026-11-18
+
+Released and published: **v0.1.9** on npm (`npm install -g mcp-deploy`), 242
+tests green, `main` carrying a per-batch release convention (`CONTRIBUTING.md`
+— bump, tag, CI publishes via OIDC; the bump matters because consumers pin a
+git dependency and webpack validates its cache by package version, not file
+content). The seeded catalog is now three MCPs: Zotero Assistant, Paper Search,
+and MCP Deploy Assistant.
+
+**§1's framing is partly obsolete, and worth re-reading before more work.** It
+opens with "lab mates have to `git clone`, `npm install`, `npm link`" — that is
+no longer true. Publishing to npm means the CLI route is `npm install -g
+mcp-deploy` and updates are `npm update -g`, which relieves a large share of
+the original onboarding pain on its own, without the hosted app. What the
+hosted app still uniquely buys is: no Node at all, no Cloudflare account, no
+`wrangler login`, and centrally pushed MCP updates (phase 6).
+
+Still open, in dependency order:
+
+1. **A D1 or Postgres `Store` implementation** — in the hosted repo. The seam
+   (§12) is complete and waiting; `db.ts` has exactly one importer.
+2. **Dashboard auth** (phase 3) — also the hosted repo. Blocks a public URL;
+   see §4 for the recommendation (Google, domain-restricted).
+3. **A public URL** (the rest of phase 2) — must follow auth, not precede it.
+4. **Phase 6, "update all deployments"** — the feature that actually answers
+   the update complaint. Unblocked now that the JWT rotation bug is fixed
+   (§14), but see the lesson at the end of §14 before building it.
+
+Two decisions remain genuinely undecided, and neither is blocked by code:
+
+- **Secret custody (§6).** Untouched. Managed mode means holding lab mates'
+  API keys and making this app's `ENCRYPTION_KEY` the crown jewel for everyone.
+  Nothing shipped so far has forced this, because everything through phase 4 is
+  still effectively single-user.
+- **The two Model-B figures from §10** — the 100/500 script limits and the $5
+  tier — are still unverified against current Cloudflare pricing. They set the
+  user ceiling, so confirm them before promising the lab a headcount.
