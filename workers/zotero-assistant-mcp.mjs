@@ -63519,6 +63519,7 @@ var Agent = class Agent2 extends Server {
     };
   }
   _setStateInternal(state, source = "server") {
+    if (JSON.stringify(state) === JSON.stringify(this._state)) return;
     this._state = state;
     this.sql`
     INSERT OR REPLACE INTO cf_agents_state (id, state)
@@ -64837,7 +64838,10 @@ var McpAgent = class McpAgent2 extends Agent {
   }
   /** Update and store the props */
   async updateProps(props) {
-    await this.ctx.storage.put("props", props ?? {});
+    const _incoming = props ?? {};
+    if (JSON.stringify(_incoming) !== JSON.stringify(this.props)) {
+      await this.ctx.storage.put("props", _incoming);
+    }
     this.props = props;
   }
   async reinitializeServer() {
