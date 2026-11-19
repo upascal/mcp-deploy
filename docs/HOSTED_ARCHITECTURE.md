@@ -9,30 +9,80 @@ without a Cloudflare account, and if so, where is the boundary between
 **Built so far:** phase 1 (§11), the phase 2 storage seam (§12), phase 4's
 worker-name namespace plus the library surface the hosted app consumes (§13),
 and the REST deploy path hardened against live Cloudflare (§14). Reviewed
-2026-11-18 — see §15 for what is actually left.
+2026-11-19 — see §15 for what is actually left, and §1 for how publishing to
+npm changed what the hosted app still needs to buy.
 
 ---
 
 ## 1. The pain we're actually solving
 
+> **Revised 2026-11-19 — publishing to npm resolved half of this without any
+> of the architecture in this document.** The package ships as `mcp-deploy`
+> (v0.1.9), so installing is `npm install -g mcp-deploy` and updating is
+> `npm update -g mcp-deploy`. The original three bullets are kept below because
+> the control-plane / data-plane split they motivate is still the whole basis
+> of the design — but the ~90% figure that used to close this section was
+> recalibrated downward as a result. See *What is left, after npm*.
+
 The stated problem is onboarding and updates:
 
-- Lab mates have to `git clone`, `npm install`, `npm link`, install Node 20+.
-- Every time the dashboard changes, they have to `git pull` and re-link.
-- They also need their own Cloudflare account and to complete a `wrangler login`.
+- ~~Lab mates have to `git clone`, `npm install`, `npm link`, install Node 20+.~~
+  → now `npm install -g mcp-deploy`. **Resolved**, except that Node 20+ is
+  still a prerequisite.
+- ~~Every time the dashboard changes, they have to `git pull` and re-link.~~
+  → now `npm update -g mcp-deploy`. **Mostly resolved** — it is one command
+  instead of three, but it is still a command someone has to know to run.
+- They also need their own Cloudflare account and to complete a
+  `wrangler login`. **Unchanged — this is now the dominant remaining friction.**
 
 Note that only the *first two* are about the dashboard. The third is about
 where the worker runs. **These are separate problems and they have separate
-answers.** Conflating them is what makes the design question feel hard.
+answers.** Conflating them is what makes the design question feel hard. That
+split is also why npm could fix half the problem on its own: it addresses the
+control plane's *distribution*, and touches the data plane not at all.
 
 | Layer | What it is | Who should run it |
 |---|---|---|
 | **Control plane** | The Next.js dashboard, catalog, secret entry, deploy orchestration | **Always hosted by us.** No exceptions. |
 | **Data plane** | The Cloudflare Worker that actually serves `/mcp` and holds API keys | Configurable — see §3 |
 
-Hosting the control plane alone eliminates ~90% of the reported pain. Nobody
-installs anything, and updates to the dashboard are a `git push`. That decision
-is easy and should not wait on the harder data-plane question.
+Hosting the control plane is still the easy half of the decision, and it should
+not wait on the harder data-plane question. What changed is how much it buys on
+its own.
+
+### What is left, after npm — 2026-11-19
+
+Publishing took the cheapest and largest bite out of onboarding. What a lab
+mate still has to do, and which of it each approach removes:
+
+| Still required of a lab mate | npm | Hosted |
+|---|---|---|
+| Install Node 20+ | ✗ | ✓ nothing to install |
+| Install the package | ✓ one command | ✓ nothing to install |
+| Run `mcp-deploy gui` locally to use it | ✗ | ✓ it is a URL |
+| Know to run `npm update -g` | partly | ✓ nothing to do |
+| Have a Cloudflare account | ✗ | ✓ Model B |
+| Complete `wrangler login` | ✗ | ✓ Model B |
+| Notice an MCP update and click redeploy | ✗ | ✓ phase 6 |
+
+So the earlier claim that hosting the control plane "eliminates ~90% of the
+reported pain" no longer holds — npm collected much of that, and what remains
+sits mostly in the **data plane**. Two consequences for sequencing:
+
+- **Getting the dashboard to a URL is worth less than it used to be.** It is
+  still required, since it is how everything else becomes reachable, but it is
+  no longer the biggest win per unit of work. §9's phase 2 label has been struck
+  through accordingly.
+- **The managed Cloudflare account (Model B, phase 4) and central updates
+  (phase 6) are now where most of the remaining pain lives.** Both are also the
+  phases that depend on the secret-custody decision in §6 — so that decision is
+  more load-bearing than it looked in August, when it could be deferred behind
+  two phases of single-user work.
+
+A useful way to hold it: npm made the tool *easy to get*. The hosted app is
+about making it *require nothing of the user at all* — no runtime, no
+Cloudflare account, no maintenance action. Those are different goods, and only
+the second one needs this document.
 
 ## 2. What the codebase already supports
 
@@ -344,15 +394,22 @@ Each phase is independently shippable and useful on its own.
 | Phase | Work | Unblocks |
 |---|---|---|
 | **1** ✅ | Consolidate on `CloudflareDeployService`; retire the `wrangler` shell-out from the deploy path; feed real `cf_token` / `cf_account_id` from env | Anything hosted at all |
-| **2** ◐ | Move storage off local SQLite to D1/Postgres; deploy the dashboard to a URL | Kills the install/update pain — **biggest win per unit of work** |
+| **2** ◐ | Move storage off local SQLite to D1/Postgres; deploy the dashboard to a URL | Makes everything else reachable — ~~biggest win per unit of work~~, npm took most of that (§1) |
 | **3** ☐ | Dashboard auth + user identity (**in the hosted repo**, not here — see §5) | Multi-user |
 | **4** ◐ | Namespace worker names per user ✅ (§13); managed deployment target still implicit | Model B |
 | **5** ☐ | Per-user BYO-Cloudflare setting in Settings | Model C preserved |
 | **6** ☐ | "Update all deployments" — redeploy every user's worker on a new release | The update pain, solved centrally |
 
-Phases 1–2 alone deliver most of the stated value and require no decision about
-secret custody. That is a good place to start regardless of how the Model B
-question ultimately lands.
+~~Phases 1–2 alone deliver most of the stated value and require no decision
+about secret custody. That is a good place to start regardless of how the
+Model B question ultimately lands.~~
+
+Superseded 2026-11-19: this was true when the alternative was a git clone. Now
+that the package is published, phases 1–2 no longer deliver "most of the stated
+value" — npm does (§1). The part of the claim that still holds is the narrower
+one: phases 1–2 require no secret-custody decision. But the phases that *do*
+carry the remaining value, 4 and 6, both need it, so custody can no longer be
+deferred indefinitely behind single-user work.
 
 Revised note (2026-11-18): phase 4's namespace landed *before* phase 3, out of
 the order above, because the hosted app needed it to deploy a second user's
@@ -559,13 +616,11 @@ git dependency and webpack validates its cache by package version, not file
 content). The seeded catalog is now three MCPs: Zotero Assistant, Paper Search,
 and MCP Deploy Assistant.
 
-**§1's framing is partly obsolete, and worth re-reading before more work.** It
-opens with "lab mates have to `git clone`, `npm install`, `npm link`" — that is
-no longer true. Publishing to npm means the CLI route is `npm install -g
-mcp-deploy` and updates are `npm update -g`, which relieves a large share of
-the original onboarding pain on its own, without the hosted app. What the
-hosted app still uniquely buys is: no Node at all, no Cloudflare account, no
-`wrangler login`, and centrally pushed MCP updates (phase 6).
+**§1 has been revised to account for this** (2026-11-19). The short version:
+npm relieved a large share of the original onboarding pain on its own, so the
+remaining pain is weighted toward the data plane, which raises the relative
+priority of Model B and phase 6 — and with them the secret-custody decision in
+§6. See *What is left, after npm* in §1 for the breakdown.
 
 Still open, in dependency order:
 
